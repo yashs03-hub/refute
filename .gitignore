@@ -1,0 +1,20 @@
+# --- secrets ---
+.env
+.env.local
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# --- simulation output (regenerate with `refute sweep` / `refute run`) ---
+runs/
+*.out.json
+
+# --- os ---
+.DS_Store

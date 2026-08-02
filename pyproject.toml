@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "refute"
+version = "0.1.0"
+description = "Benchmarking experiment-designing agents against experiments that failed"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+# Only needed for `refute run`. The twin, the sweep and the tests do not
+# call any model.
+agent = ["anthropic>=0.40"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+refute = "refute.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["refute"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

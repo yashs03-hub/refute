@@ -1,0 +1,19 @@
+# Experiment 4 observed data — the twin's calibration source.
+# Per-well fill% (gel area / well area) by day, plus Day-10 endpoint state.
+# Conditions by column: N-SS serum-starved control, N-T TGF-b1,
+# N-CM MSC-conditioned media, N-CM+T both. Rows A/B/C = replicates.
+# Treatments applied Day 5 (t0). A1 excluded (cast failure), B3 excluded
+# (contamination). See cases/exp4/PROVENANCE.md.
+well,condition,d1_fill,d3_fill,d4_fill,d5_fill,d10_fill,d10_state
+A1,N-SS,,,24.5,23.3,,excluded
+B1,N-SS,60,48,13.3,14.2,5,collapsed
+C1,N-SS,60,42,12.5,12.0,5,collapsed
+A2,N-T,55,50,9.8,9.5,1,lysed
+B2,N-T,55,44,19.1,12.0,2,lysed
+C2,N-T,50,30,18.1,12.3,3,lysed/collapsed
+A3,N-CM,55,48,15.6,10.4,4,collapsed
+B3,N-CM,65,39,16.9,24.0,,excluded
+C3,N-CM,50,30,16.7,16.5,5,collapsed
+A4,N-CM+T,50,48,11.3,9.2,1,lysed
+B4,N-CM+T,60,39,17.4,9.0,2,lysed
+C4,N-CM+T,50,39,15.3,12.9,2,lysed
