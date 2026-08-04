@@ -36,6 +36,64 @@ def cmd_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_assays(args: argparse.Namespace) -> int:
+    """List assay protocols and their calibration status."""
+    from .assays import REGISTRY, get
+
+    if args.key:
+        p = get(args.key)
+        body = [
+            f"{p.name}",
+            f"status : {p.status.value.upper()}   unit: {p.unit}",
+            f"readout: {p.readout.name} ({p.readout.units}), "
+            f"{p.readout.direction} with fibrosis",
+            "",
+            p.summary,
+            "",
+            "why it matters:",
+            f"  {p.why_it_matters}",
+            "",
+            "failure mechanism:",
+            f"  {p.hazard.mechanism}",
+            f"  driven by: {p.hazard.driver}"
+            + ("  <- the measured phenotype" if p.hazard.driver_is_the_measured_phenotype else ""),
+        ]
+        if p.hazard.mitigation:
+            body.append(f"  mitigation: {p.hazard.mitigation}")
+        missing = p.missing_constants()
+        if missing:
+            body += ["", f"missing constants ({len(missing)}):"]
+            body += [f"  - {c.name} ({c.units})" for c in missing]
+        if p.calibration_needs:
+            body += ["", "to calibrate, obtain:"]
+            body += [f"  - {n}" for n in p.calibration_needs]
+        if p.paperclip_query:
+            body += ["", "paperclip query:", f"  {p.paperclip_query}"]
+        if p.notes:
+            body += ["", "notes:", f"  {p.notes}"]
+        _print(p.key, "\n".join(body))
+        return 0
+
+    width = max(len(p.unit) for p in REGISTRY.values()) + 2
+    lines = [f"{'key':<22} {'status':<10} {'unit':<{width}} missing"]
+    for p in REGISTRY.values():
+        lines.append(
+            f"{p.key:<22} {p.status.value:<10} {p.unit:<{width}} "
+            f"{len(p.missing_constants())}"
+        )
+    lines += [
+        "",
+        "Only MEASURED protocols can be scored. Scaffolds raise "
+        "UncalibratedAssayError",
+        "by design: inventing constants would reintroduce exactly the problem",
+        "this benchmark exists to avoid.",
+        "",
+        "Detail: refute assays --key scar_in_a_jar",
+    ]
+    _print("ASSAY PROTOCOLS", "\n".join(lines))
+    return 0
+
+
 def cmd_sweep(args: argparse.Namespace) -> int:
     """The two failures are separable - show that they must both be fixed."""
     rows = []
@@ -121,6 +179,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser(
         "sweep", parents=[common], help="antifibrinolytic x replicates grid"
     ).set_defaults(func=cmd_sweep)
+
+    p_assays = sub.add_parser(
+        "assays", parents=[common], help="list assay protocols and calibration status"
+    )
+    p_assays.add_argument("--key", help="show one protocol in detail")
+    p_assays.set_defaults(func=cmd_assays)
 
     p_run = sub.add_parser(
         "run", parents=[common], help="propose -> simulate -> revise (needs API key)"
