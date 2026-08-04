@@ -27,7 +27,8 @@ Confirmed attendance.
 | Adversarial extraction set (5 designs, known specs) | ⬜ not started — see below |
 | Second case (qPCR artifact) | ⬜ not started — needs owner's go-ahead |
 | Uncertainty propagation over calibration params | ⬜ not started |
-| Proto integration | ⬜ blocked on a 20-minute check — see §2 |
+| Proto integration | ❌ **resolved: do not build** — Proto is sequence-typed (§2) |
+| BenchFlow packaging — `refute` as an eval environment | ⬜ not started — likely the right home (§2) |
 
 PRs #1–#3 merged 2026-08-04. The loop runs: propose → extract → simulate →
 revise → extract → simulate, against `openai:gpt-5.5`.
@@ -119,14 +120,18 @@ Note the constraints differ in kind, in this project's favour: Proto's come
 from predictive models, which are themselves fallible predictions. These come
 from measurements of an assay that actually failed.
 
-**Before integrating, check one thing** (20 minutes, from the GitHub repos and
-the bioRxiv preprint): are `proto-language`'s primitives generic, or typed to
-DNA/RNA/protein sequences? If generic, expressing experiment design as a Proto
-program is a real demonstration on the host's framework. If sequence-typed, do
-not force it — this design space is small and discrete (antifibrinolytic y/n,
-replicates, timepoint schedule, endpoint), so a plain grid or Bayesian search
-suffices. Integration would then be positioning, not necessity. Be honest about
-which.
+**RESOLVED 2026-08-04 — do not integrate.** The organisers' own tool description
+settles the open question: Proto is "a high-level programming language for
+designing DNA, RNA, and protein sequences", and its Segments are defined as
+"contiguous sequence regions" grouped into Constructs. The primitives are
+sequence-typed, not generic.
+
+So the mapping in the table above is a genuine *analogy* and nothing more. Do
+not force an integration: this design space is small and discrete
+(antifibrinolytic y/n, replicates, timepoint schedule, endpoint), and a plain
+grid or Bayesian search suffices. Keep the argument, drop the dependency — the
+seam above is still the right thing to say to Proto's authors, and it costs
+nothing to say without building on their stack.
 
 ### Paperclip — the knowledge layer
 
@@ -146,15 +151,67 @@ results. An abstract index cannot calibrate a twin; a full-text one can.
 > is filtered by what gets written up — and no amount of indexing recovers what
 > was never recorded.
 
-### The three-layer map
+### BenchFlow — the harness layer, and the closest neighbour
+
+Added 2026-08-04 after reading the organisers' tool list. This was missed
+earlier and matters more than Proto ever did.
+
+BenchFlow is "a framework for creating evals and environments for agents
+learning", used to ship SkillsBench, FrontierPhysics, ClawsBench and PostTrain —
+and the description says explicitly: *"You can use it to create data and
+environment for life sciences to evaluate and improve agents."*
+
+That is a one-line description of what `refute` is. An eval environment for
+agents, in life sciences. Where Proto was an analogy, this is the same category.
+
+**Implication.** `refute` should probably be packaged as a BenchFlow
+environment rather than a standalone CLI. The twin becomes the environment, the
+`DesignSpec` the action space, and `score_design` the reward — which is already
+the internal architecture, so the port is mostly interface work.
+
+**The distinction to keep sharp**, because "why not just use BenchFlow" is the
+obvious question from a BenchFlow judge:
+
+> BenchFlow is the harness for running evals. The hard part here was never the
+> harness — it was obtaining a reward signal that is not another model's
+> opinion. `refute` contributes the *scorer*, calibrated on measurements from an
+> experiment that failed. Put it in BenchFlow and it becomes a benchmark other
+> people can run; leave it out and it stays a demo.
+
+Treat that as a genuine opportunity, not a threat: being a BenchFlow
+environment is distribution, and BenchFlow is a co-host.
+
+### The four-layer map
 
 | Layer | Tool | Question it answers |
 |---|---|---|
 | Knowledge | Paperclip | What is already known? |
 | Entity design | Proto | What candidate should I build? |
+| Harness | BenchFlow | How do I run and score agents repeatably? |
 | **Validation** | **`refute`** | **Can the experiment that tests it actually answer the question?** |
 
-Nobody has built the third. That is the pitch.
+Nobody has built the fourth. That is the pitch — and the third is where it
+should live.
+
+### Tracks — which one this is
+
+The event runs three tracks, plus bring-your-own:
+
+| Track | Brief | Fit |
+|---|---|---|
+| A — Build the AI Scientist | Automate a scientific workflow end to end | Partial. `refute` *evaluates* such agents rather than being one |
+| **B — Build the Dataset** | *"Assemble a research-ready dataset that doesn't exist yet because the facts sit one line at a time across thousands of papers. Read and retain the whole corpus, then find the pattern no single paper could show you."* | **Direct hit — this is §6** |
+| C — Build the Biological Design | Literature into a generative pipeline | No |
+
+**Track B is the calibration work in §6, almost verbatim.** Assay failure
+constants sit one line at a time across thousands of methods sections; the
+dataset does not exist; and the pattern no single paper can show is *which
+constants are systematically absent*. §6 stopped looking like a side quest the
+moment this track description appeared — it is a submission.
+
+That also resolves what to build on the day. The strongest position is both:
+Track B as the entry (the missing-constants dataset), with `refute` as the
+working artefact that motivates it and gives the dataset a use.
 
 ---
 
