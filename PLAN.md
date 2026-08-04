@@ -4,8 +4,12 @@ Authoritative build state. `README.md` is the pitch; this is what is done, what
 is next, and what is deliberately not being built.
 
 Target: **re:AGENT — End to End Agentic Science**, 15–16 Aug 2026, San
-Francisco. Track A (an agent that carries out a defined scientific workflow).
-Confirmed attendance.
+Francisco. Confirmed attendance.
+
+**Track B — Build the Dataset** (see §2). Track A was the earlier assumption and
+was wrong: `refute` evaluates agents that automate a workflow rather than being
+one, whereas Track B's brief — facts that "sit one line at a time across
+thousands of papers" — is the §6 calibration almost verbatim.
 
 ---
 
@@ -293,7 +297,9 @@ working artefact that motivates it and gives the dataset a use.
 | Demo needs a live run on stage | `baseline` and `sweep` are instant and need no API key — those are the demo; `run` is the flourish. The twin needs no GPU or sponsor compute, so the demo cannot die on venue infrastructure |
 | **"Isn't this just a virtual cell?"** — Arc affiliates two of the seven co-hosts (Arc directly, and Proto via the Lab of Evolutionary Design) | Have the one-liner ready and lead with it: *a virtual cell predicts the biology; this models the apparatus. A perfect virtual cell still will not tell you the fibrin gel dissolves on day 7, that the most-treated arm fails first, or that segmentation noise means you needed 50 wells.* Complementary, not competing |
 | Paperclip-derived case 2 dilutes the "unpublished ground truth" claim | Label the two cases' epistemic status separately in the README (§3 item 5). Measured ≠ literature-derived |
-| Proto integration turns out to be a dead end mid-build | Do the 20-minute sequence-bound check (§2) *before* committing any architecture to it. The optimizer (§3 item 3) is worth building regardless and does not depend on Proto |
+| ~~Proto integration turns out to be a dead end mid-build~~ | **Retired 2026-08-04** — checked and it is one. Proto is sequence-typed, so nothing was built on it. The risk cost nothing because the check happened before the architecture |
+| **"Why not just build this in BenchFlow?"** — asked by a BenchFlow judge | Agree, and say so first: it probably *should* live there. The harness was never the hard part; a reward signal that is not another model's opinion was. `refute` contributes the scorer, BenchFlow contributes the distribution |
+| Track B entry is judged as a literature-mining exercise | Lead with the absence, not the extraction. The dataset's value is which constants are *missing* and the pattern in which ones — a claim about publishing practice that no single paper can support |
 | Public presentation is a patent disclosure | UK/EPO have no grace period — the same trap already hit `versionCTRL`. Make it a conscious decision before the 15th, not a discovery after |
 
 ---
