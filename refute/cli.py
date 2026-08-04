@@ -120,6 +120,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     _print("REVISED DESIGN", revised_text)
 
     revised_spec = extract_design(revised_text, extractor=extractor)
+    _print("EXTRACTED SPEC (revised)", revised_spec.model_dump_json(indent=2))
+
     revised_score = score_design(revised_spec, n_sims=args.sims)
     _print("SIMULATED (revised)", revised_score.summary())
 

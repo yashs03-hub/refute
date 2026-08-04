@@ -56,14 +56,33 @@ class DesignScore:
     # and the replicates per arm the injected effect would actually need.
     min_detectable_ratio_diff: float = float("nan")
     replicates_needed: int = -1
+    n_conditions: int = 0
     diagnoses: list[str] = field(default_factory=list)
 
     @property
     def failed(self) -> bool:
         return self.power < 0.5
 
+    @property
+    def infeasible_as_scoped(self) -> bool:
+        """The apparatus cannot hold the replication the effect requires.
+
+        Distinct from 'underpowered': no amount of care with a single plate
+        fixes it. The honest verdict is that the question cannot be answered at
+        this scale, which is a finding rather than a failure.
+        """
+        arms = max(self.n_conditions, 1)
+        return self.replicates_needed > 0 and self.replicates_needed * arms > PLATE_WELLS
+
     def summary(self) -> str:
-        lines = [
+        lines = []
+        if self.over_plate_capacity:
+            lines.append(
+                "!! exceeds the calibrated apparatus - the numbers below assume "
+                "the assay scales beyond one plate, which is NOT calibrated "
+                "(no data on between-cast or between-plate batch effects)."
+            )
+        lines += [
             f"power to recover injected effect : {self.power:.0%}",
             f"plates yielding a testable result: {self.testable_rate:.0%}",
             f"mean usable wells per plate      : {self.mean_usable_wells:.1f}",
@@ -137,6 +156,23 @@ def score_design(
             f"binding constraint."
         )
 
+    # Saying "you need 47 per arm" without saying "and you have 12 wells total"
+    # invites the agent to scale to 24 plates, which is a different experiment
+    # the twin has no calibration for. The resource limit is already stated in
+    # the brief, so restating it here reports a violated constraint rather than
+    # supplying a fix.
+    arms = max(len(design.conditions), 1)
+    if reps_needed > 0 and reps_needed * arms > PLATE_WELLS:
+        diagnoses.append(
+            f"infeasible at this scale: {reps_needed} wells per arm across "
+            f"{arms} arms is {reps_needed * arms} wells, and the assay as "
+            f"calibrated is ONE {PLATE_WELLS}-well plate. No change to timing or "
+            "formulation recovers this. The available moves are to narrow the "
+            "contrast to fewer arms, to make the measurement itself more "
+            "precise, or to report that the question cannot be answered at this "
+            "scale - the last is a legitimate answer, not a failure."
+        )
+
     if mean_lysed > 0.3:
         agent = "no antifibrinolytic in the formulation" if not design.antifibrinolytic \
             else "endpoint sits beyond scaffold survival even with an antifibrinolytic"
@@ -198,6 +234,7 @@ def score_design(
         identifies_contraction_kinetics=identifies_kinetics,
         min_detectable_ratio_diff=mde,
         replicates_needed=reps_needed,
+        n_conditions=len(design.conditions),
         diagnoses=diagnoses,
     )
 
