@@ -71,13 +71,41 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_providers(args: argparse.Namespace) -> int:
+    """What can actually be called right now, and why not if it can't."""
+    from .providers import DEFAULT_AGENT, DEFAULT_EXTRACTOR, available
+
+    lines = [f"{name:<12} {status}" for name, status in available().items()]
+    lines += [
+        "",
+        f"default agent     {DEFAULT_AGENT}   (the subject - vary this)",
+        f"default extractor {DEFAULT_EXTRACTOR}   (infrastructure - hold constant)",
+        "",
+        "Vary the agent to compare models; keep the extractor fixed, or a",
+        "difference in score cannot be attributed to design quality rather than",
+        "to how accurately the prose was parsed.",
+        "",
+        "  refute run --agent openai:gpt-5.5 --agent-effort high",
+        "  refute run --agent claude-opus-5",
+    ]
+    _print("PROVIDERS", "\n".join(lines))
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     from .agent import EXPERIMENT_4_BRIEF, extract_design, propose_design, revise_design
+    from .providers import DEFAULT_EXTRACTOR, spec_from_string
 
-    design_text = propose_design()
+    agent = spec_from_string(args.agent, args.agent_effort)
+    extractor = (
+        spec_from_string(args.extractor, "low") if args.extractor else DEFAULT_EXTRACTOR
+    )
+    print(f"agent     {agent}\nextractor {extractor}  (held constant)\n")
+
+    design_text = propose_design(agent=agent)
     _print("PROPOSED DESIGN", design_text)
 
-    spec = extract_design(design_text)
+    spec = extract_design(design_text, extractor=extractor)
     _print("EXTRACTED SPEC", spec.model_dump_json(indent=2))
 
     score = score_design(spec, n_sims=args.sims)
@@ -87,10 +115,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 0
 
     feedback = feedback_for_agent(score)
-    revised_text = revise_design(EXPERIMENT_4_BRIEF, design_text, feedback)
+    revised_text = revise_design(EXPERIMENT_4_BRIEF, design_text, feedback, agent=agent)
     _print("REVISED DESIGN", revised_text)
 
-    revised_spec = extract_design(revised_text)
+    revised_spec = extract_design(revised_text, extractor=extractor)
     revised_score = score_design(revised_spec, n_sims=args.sims)
     _print("SIMULATED (revised)", revised_score.summary())
 
@@ -122,10 +150,26 @@ def main(argv: list[str] | None = None) -> int:
         "sweep", parents=[common], help="antifibrinolytic x replicates grid"
     ).set_defaults(func=cmd_sweep)
 
+    sub.add_parser(
+        "providers", parents=[common], help="which models are callable right now"
+    ).set_defaults(func=cmd_providers)
+
     p_run = sub.add_parser(
         "run", parents=[common], help="propose -> simulate -> revise (needs API key)"
     )
     p_run.add_argument("--no-revise", action="store_true")
+    p_run.add_argument(
+        "--agent",
+        default="openai:gpt-5.5",
+        help="model under test, e.g. openai:gpt-5.5 or claude-opus-5",
+    )
+    p_run.add_argument(
+        "--agent-effort", default="high", choices=("low", "medium", "high")
+    )
+    p_run.add_argument(
+        "--extractor",
+        help="prose->spec model. Leave unset: it should be constant across runs.",
+    )
     p_run.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)
