@@ -16,5 +16,12 @@ dist/
 runs/
 *.out.json
 
+# --- git worktrees created inside the repo ---
+# Each holds a full copy of the tree, so committing one would nest the repo in
+# itself. Scoped to worktrees/ rather than all of .claude/ on purpose: project
+# Claude config (settings, agents, commands) belongs in version control, and a
+# blanket ignore would drop it silently.
+.claude/worktrees/
+
 # --- os ---
 .DS_Store
