@@ -33,7 +33,7 @@ Known limits (state these alongside any result)
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -57,6 +57,24 @@ MSC_CM_ARMS = {"N-CM", "N-CM+T"}
 # whose endpoint sits close to t0; a Day-7 or Day-10 endpoint is many multiples
 # of this away and is insensitive to it.
 TREATMENT_TAU_H = 24.0
+
+# How long after treatment an image still counts as a pre-treatment baseline.
+# Derived rather than chosen: the treatment effect grows toward
+# |tgfb_effect_pct| with TREATMENT_TAU_H, so allow a baseline image only while
+# that contribution stays below a small fraction of per-frame measurement noise.
+# Inside this window the image is contaminated by less than the noise floor, so
+# treating it as a baseline costs nothing; outside it, the "baseline" already
+# contains part of the effect it is meant to normalise away.
+BASELINE_NOISE_FRACTION = 0.2
+
+
+def baseline_tolerance_h(params: TwinParams = DEFAULT_PARAMS) -> float:
+    """Grace period after t0 during which an image is still a valid baseline."""
+    budget = BASELINE_NOISE_FRACTION * params.measurement_noise_pct
+    effect = abs(params.tgfb_effect_pct)
+    if effect <= budget:  # effect never rises above the noise floor
+        return float("inf")
+    return -TREATMENT_TAU_H * math.log(1.0 - budget / effect)
 
 
 @dataclass
@@ -90,6 +108,7 @@ class PlateResult:
 
     wells: list[WellResult]
     design: DesignSpec
+    tolerance_h: float = field(default_factory=baseline_tolerance_h)
 
     @property
     def usable_wells(self) -> list[WellResult]:
@@ -102,9 +121,22 @@ class PlateResult:
         ]
 
     def _baseline_time(self) -> float:
-        """Latest scheduled imaging at or before treatment - the per-well baseline."""
-        pre = [t for t in self.design.imaging_times_h if t <= self.design.treatment_time_h]
-        return max(pre) if pre else self.design.treatment_time_h
+        """The per-well pre-treatment reference image.
+
+        Prefer the latest image at or before treatment. Failing that, accept an
+        image taken shortly AFTER treatment: a strict `t <= t0` rule discards
+        designs that add medium at 0.75 h and image at 1 h, which is a real
+        protocol and a perfectly good baseline - fifteen minutes into a 24 h
+        time-constant the gel has moved about 1% of the effect. The tolerance is
+        derived from the calibration rather than chosen; see
+        `baseline_tolerance_h`.
+        """
+        t0 = self.design.treatment_time_h
+        pre = [t for t in self.design.imaging_times_h if t <= t0]
+        if pre:
+            return max(pre)
+        near = [t for t in self.design.imaging_times_h if t <= t0 + self.tolerance_h]
+        return min(near) if near else t0
 
     def ratios_by_condition(self) -> dict[str, list[float]]:
         base = self._baseline_time()
@@ -239,7 +271,9 @@ class ExperimentTwin:
                         fill_by_time=fills,
                     )
                 )
-        return PlateResult(wells=wells, design=design)
+        return PlateResult(
+            wells=wells, design=design, tolerance_h=baseline_tolerance_h(self.p)
+        )
 
     def simulate_many(self, design: DesignSpec, n: int) -> list[PlateResult]:
         return [self.simulate_plate(design) for _ in range(n)]

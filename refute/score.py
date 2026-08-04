@@ -19,7 +19,7 @@ from scipy import stats
 
 from .calibration import DEFAULT_PARAMS, PLATE_WELLS, TwinParams
 from .design import DesignSpec
-from .twin import ExperimentTwin, PlateResult
+from .twin import ExperimentTwin, PlateResult, baseline_tolerance_h
 
 ALPHA = 0.05
 MIN_WELLS_PER_ARM = 2          # below this, no test is possible
@@ -183,12 +183,16 @@ def score_design(
             "TGF-b arms fail first - exactly the arms the contrast needs."
         )
 
-    pre_t0 = [t for t in design.imaging_times_h if t <= design.treatment_time_h]
+    # Must match the twin's own rule, including the derived grace period after
+    # t0 - a diagnosis that fires when the twin found a usable baseline anyway
+    # would send the agent to fix something that is not broken.
+    tol = baseline_tolerance_h(params)
+    pre_t0 = [t for t in design.imaging_times_h if t <= design.treatment_time_h + tol]
     if not pre_t0:
         diagnoses.append(
-            "no imaging before t0, so no per-well pre-treatment baseline exists; "
-            "between-well heterogeneity (observed ratio spread 0.60-0.96) then "
-            "swamps the treatment signal."
+            f"no imaging within {tol:.1f} h of t0, so no per-well pre-treatment "
+            "baseline exists; between-well heterogeneity (observed ratio spread "
+            "0.60-0.96) then swamps the treatment signal."
         )
     if not design.normalise_to_own_baseline:
         diagnoses.append(
