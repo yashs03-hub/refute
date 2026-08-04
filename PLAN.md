@@ -4,8 +4,12 @@ Authoritative build state. `README.md` is the pitch; this is what is done, what
 is next, and what is deliberately not being built.
 
 Target: **re:AGENT — End to End Agentic Science**, 15–16 Aug 2026, San
-Francisco. Track A (an agent that carries out a defined scientific workflow).
-Confirmed attendance.
+Francisco. Confirmed attendance.
+
+**Track B — Build the Dataset** (see §2). Track A was the earlier assumption and
+was wrong: `refute` evaluates agents that automate a workflow rather than being
+one, whereas Track B's brief — facts that "sit one line at a time across
+thousands of papers" — is the §6 calibration almost verbatim.
 
 ---
 
@@ -17,19 +21,54 @@ Confirmed attendance.
 | `twin.py` — contraction, lysis, heterogeneity, attrition, measurement | ✅ done |
 | `design.py` — `DesignSpec`, plus Experiment 4 as run | ✅ done |
 | `score.py` — power, testability, MDE, failure diagnosis | ✅ done |
-| `tests/` — 12 calibration tests, all passing | ✅ done |
-| `cli.py` — `baseline` · `sweep` · `run` | ✅ done |
-| `agent.py` — propose / revise / extract | ⚠️ written, **never run against the API** |
+| `assays/` — protocol registry behind a calibration gate | ✅ done (PR #2) |
+| `providers.py` — OpenAI + Anthropic behind one interface | ✅ done (PR #3) |
+| `agent.py` — propose / revise / extract | ✅ **run live, end to end** |
+| `tests/` — 62 passing | ✅ done |
+| `cli.py` — `baseline` · `sweep` · `assays` · `providers` · `run` | ✅ done |
+| Calibrating the six tier-1 scaffolds | ⬜ **blocked on Paperclip credential — see §6** |
 | Optimizer — cheapest design meeting a power target | ⬜ not started; `sweep` is a grid, not a search |
-| Second case, Paperclip-calibrated (§3) | ⬜ not started |
+| Adversarial extraction set (5 designs, known specs) | ⬜ not started — see below |
 | Second case (qPCR artifact) | ⬜ not started — needs owner's go-ahead |
 | Uncertainty propagation over calibration params | ⬜ not started |
-| Proto integration | ⬜ blocked on a 20-minute check — see §2 |
+| Proto integration | ❌ **resolved: do not build** — Proto is sequence-typed (§2) |
+| BenchFlow packaging — `refute` as an eval environment | ⬜ not started — likely the right home (§2) |
 
-**The one real gap:** `agent.py` has not made a single live API call. Everything
-else is verified. That is the first thing to do next, because extraction
-fidelity is the most likely place this breaks — if the extractor mis-reads a
-design, the twin scores the wrong plate and the failure looks like the agent's.
+PRs #1–#3 merged 2026-08-04. The loop runs: propose → extract → simulate →
+revise → extract → simulate, against `openai:gpt-5.5`.
+
+**First live result.** gpt-5.5 independently reproduced Experiment 4's two
+defects — n=3 per arm, no antifibrinolytic, no reasoning about scaffold loss.
+Given consequence-feedback it narrowed to the two arms that matter, filled the
+plate (2×6), added a pre-treatment baseline and flagged scaffold failure:
+testable 0% → 97%. Power still only reached 9%, with ~57 wells/arm required.
+**Even the best design available on one plate cannot answer the question** —
+that verdict is the finding.
+
+**The live runs found three bugs, two of them in the scorer, not the agent:**
+
+1. gpt-5.5 at high effort spent a 16k budget entirely on reasoning and returned
+   no visible text. Budgets raised; a ledger now counts reasoning tokens, which
+   were ~85% of output.
+2. The feedback demanded ~47 wells/arm without stating the brief's one-plate
+   limit, so the agent scaled to 288 wells across 24 plates and was marked down
+   for following the advice. A scorer that demands what it refuses to score is
+   broken; infeasibility is now a named verdict.
+3. The twin rejected a design that treated at 0.75 h and imaged at 1 h, because
+   it demanded a baseline at or before t0 *exactly*. That is a good baseline.
+   The grace period is now derived from the calibration (2.89 h).
+
+Both scorer bugs were false negatives — confidently returning 0% for sound
+designs — which is why tests missed them and running it for real did not.
+
+**Remaining gap:** the extractor is now `gpt-5.4-mini` and its fidelity is
+unvalidated. It is the leading suspect for any surprising score until the
+adversarial extraction set exists.
+
+**Operational constraint discovered:** the binding limit is rate, not cost.
+10k TPM on gpt-5.5 vs 100k on gpt-5.4-mini, and pools are per-model — which is
+why the extractor sits on a different model. A full loop on a frontier model is
+throughput-bound at ~2–3 min regardless of credit balance.
 
 ---
 
@@ -85,14 +124,18 @@ Note the constraints differ in kind, in this project's favour: Proto's come
 from predictive models, which are themselves fallible predictions. These come
 from measurements of an assay that actually failed.
 
-**Before integrating, check one thing** (20 minutes, from the GitHub repos and
-the bioRxiv preprint): are `proto-language`'s primitives generic, or typed to
-DNA/RNA/protein sequences? If generic, expressing experiment design as a Proto
-program is a real demonstration on the host's framework. If sequence-typed, do
-not force it — this design space is small and discrete (antifibrinolytic y/n,
-replicates, timepoint schedule, endpoint), so a plain grid or Bayesian search
-suffices. Integration would then be positioning, not necessity. Be honest about
-which.
+**RESOLVED 2026-08-04 — do not integrate.** The organisers' own tool description
+settles the open question: Proto is "a high-level programming language for
+designing DNA, RNA, and protein sequences", and its Segments are defined as
+"contiguous sequence regions" grouped into Constructs. The primitives are
+sequence-typed, not generic.
+
+So the mapping in the table above is a genuine *analogy* and nothing more. Do
+not force an integration: this design space is small and discrete
+(antifibrinolytic y/n, replicates, timepoint schedule, endpoint), and a plain
+grid or Bayesian search suffices. Keep the argument, drop the dependency — the
+seam above is still the right thing to say to Proto's authors, and it costs
+nothing to say without building on their stack.
 
 ### Paperclip — the knowledge layer
 
@@ -112,15 +155,67 @@ results. An abstract index cannot calibrate a twin; a full-text one can.
 > is filtered by what gets written up — and no amount of indexing recovers what
 > was never recorded.
 
-### The three-layer map
+### BenchFlow — the harness layer, and the closest neighbour
+
+Added 2026-08-04 after reading the organisers' tool list. This was missed
+earlier and matters more than Proto ever did.
+
+BenchFlow is "a framework for creating evals and environments for agents
+learning", used to ship SkillsBench, FrontierPhysics, ClawsBench and PostTrain —
+and the description says explicitly: *"You can use it to create data and
+environment for life sciences to evaluate and improve agents."*
+
+That is a one-line description of what `refute` is. An eval environment for
+agents, in life sciences. Where Proto was an analogy, this is the same category.
+
+**Implication.** `refute` should probably be packaged as a BenchFlow
+environment rather than a standalone CLI. The twin becomes the environment, the
+`DesignSpec` the action space, and `score_design` the reward — which is already
+the internal architecture, so the port is mostly interface work.
+
+**The distinction to keep sharp**, because "why not just use BenchFlow" is the
+obvious question from a BenchFlow judge:
+
+> BenchFlow is the harness for running evals. The hard part here was never the
+> harness — it was obtaining a reward signal that is not another model's
+> opinion. `refute` contributes the *scorer*, calibrated on measurements from an
+> experiment that failed. Put it in BenchFlow and it becomes a benchmark other
+> people can run; leave it out and it stays a demo.
+
+Treat that as a genuine opportunity, not a threat: being a BenchFlow
+environment is distribution, and BenchFlow is a co-host.
+
+### The four-layer map
 
 | Layer | Tool | Question it answers |
 |---|---|---|
 | Knowledge | Paperclip | What is already known? |
 | Entity design | Proto | What candidate should I build? |
+| Harness | BenchFlow | How do I run and score agents repeatably? |
 | **Validation** | **`refute`** | **Can the experiment that tests it actually answer the question?** |
 
-Nobody has built the third. That is the pitch.
+Nobody has built the fourth. That is the pitch — and the third is where it
+should live.
+
+### Tracks — which one this is
+
+The event runs three tracks, plus bring-your-own:
+
+| Track | Brief | Fit |
+|---|---|---|
+| A — Build the AI Scientist | Automate a scientific workflow end to end | Partial. `refute` *evaluates* such agents rather than being one |
+| **B — Build the Dataset** | *"Assemble a research-ready dataset that doesn't exist yet because the facts sit one line at a time across thousands of papers. Read and retain the whole corpus, then find the pattern no single paper could show you."* | **Direct hit — this is §6** |
+| C — Build the Biological Design | Literature into a generative pipeline | No |
+
+**Track B is the calibration work in §6, almost verbatim.** Assay failure
+constants sit one line at a time across thousands of methods sections; the
+dataset does not exist; and the pattern no single paper can show is *which
+constants are systematically absent*. §6 stopped looking like a side quest the
+moment this track description appeared — it is a submission.
+
+That also resolves what to build on the day. The strongest position is both:
+Track B as the entry (the missing-constants dataset), with `refute` as the
+working artefact that motivates it and gives the dataset a use.
 
 ---
 
@@ -202,5 +297,126 @@ Nobody has built the third. That is the pitch.
 | Demo needs a live run on stage | `baseline` and `sweep` are instant and need no API key — those are the demo; `run` is the flourish. The twin needs no GPU or sponsor compute, so the demo cannot die on venue infrastructure |
 | **"Isn't this just a virtual cell?"** — Arc affiliates two of the seven co-hosts (Arc directly, and Proto via the Lab of Evolutionary Design) | Have the one-liner ready and lead with it: *a virtual cell predicts the biology; this models the apparatus. A perfect virtual cell still will not tell you the fibrin gel dissolves on day 7, that the most-treated arm fails first, or that segmentation noise means you needed 50 wells.* Complementary, not competing |
 | Paperclip-derived case 2 dilutes the "unpublished ground truth" claim | Label the two cases' epistemic status separately in the README (§3 item 5). Measured ≠ literature-derived |
-| Proto integration turns out to be a dead end mid-build | Do the 20-minute sequence-bound check (§2) *before* committing any architecture to it. The optimizer (§3 item 3) is worth building regardless and does not depend on Proto |
+| ~~Proto integration turns out to be a dead end mid-build~~ | **Retired 2026-08-04** — checked and it is one. Proto is sequence-typed, so nothing was built on it. The risk cost nothing because the check happened before the architecture |
+| **"Why not just build this in BenchFlow?"** — asked by a BenchFlow judge | Agree, and say so first: it probably *should* live there. The harness was never the hard part; a reward signal that is not another model's opinion was. `refute` contributes the scorer, BenchFlow contributes the distribution |
+| Track B entry is judged as a literature-mining exercise | Lead with the absence, not the extraction. The dataset's value is which constants are *missing* and the pattern in which ones — a claim about publishing practice that no single paper can support |
 | Public presentation is a patent disclosure | UK/EPO have no grace period — the same trap already hit `versionCTRL`. Make it a conscious decision before the 15th, not a discovery after |
+
+---
+
+## 6. Calibrating the six tier-1 scaffolds
+
+The `assays/` layer holds one MEASURED protocol (`fibrin_contracture`) and six
+SCAFFOLDs that **refuse to be scored** — `require_runnable()` raises
+`UncalibratedAssayError`. That refusal is a correctness property with a test
+behind it: inventing constants would reintroduce exactly the invented-ground-truth
+problem this project exists to criticise. So "calibrate" here can only mean
+*find real published values*, tagged `LITERATURE`, never `MEASURED`.
+
+**35 constants are missing across the six.**
+
+### 6.1 What a PubMed-only attempt established (2026-08-04)
+
+Attempted via the PubMed MCP. Worth recording because the *failure pattern* is
+itself the result.
+
+| Obstacle | Detail |
+|---|---|
+| Query over-narrowing | The MCP ANDs every term; precise queries returned 0–2 hits |
+| Constants live in methods, not abstracts | Abstract said "~5-fold"; full text gave 4.7-fold, Z′ 0.49–0.51, Ficoll-PM70 37.5 mg/ml, ascorbate 50 µg/ml |
+| Full text mostly unavailable | Two of three PMC fetches returned an empty body despite being indexed |
+
+**What was found** — Good et al. 2019, *BMC Biomed Eng*,
+[10.1186/s42490-019-0014-z](https://doi.org/10.1186/s42490-019-0014-z)
+(scar-in-a-jar): collagen I **4.7×** under TGF-β1 1 ng/ml with macromolecular
+crowding, α-SMA 3.2×, collagen IV 3.7×; mean signal:background **4.6**;
+Z′ **0.49–0.51**; 72 h endpoint, signal held to 5 days; TGF-β EC50 0.5 ng/ml;
+assay success rate **>95%** over 480 IC50 points.
+
+Note a discrepancy that only full text exposes: the abstract reports **CV < 5%**,
+the results section **< 15%** — and neither is the well-to-well CV of the
+*deposition readout*. It is the inter-assay CV of control-compound potency.
+A well-to-well CV can instead be *derived* from Z′ and signal:background, but
+that is a derivation and must be tagged as one.
+
+**What was not found, in any protocol: the failure constants.** Delamination
+rates, detachment rates, chip rupture per cycle, bleomycin mortality,
+contamination over a 10-day culture. Effect sizes and precisions are reported;
+what the assay does when it goes wrong is not.
+
+That asymmetry is the survivorship argument the whole project rests on, and
+completing this calibration converts it from an assertion into a measurement:
+*n* constants findable, *m* not, and a pattern in which ones.
+
+### 6.2 Why Paperclip is the right instrument
+
+Not a hypothetical integration — the need was demonstrated above. Paperclip
+indexes 11M+ papers in **full text**, and two of its five tools match the task:
+
+| Tool | Use here |
+|---|---|
+| `grep` | Regex across full texts, sub-second via trigram index. Searches for the *shape* of a number — "mortality" near "%" near "bleomycin" — rather than hoping an abstract mentions it |
+| `map` | Parallel AI analysis across many papers: "extract the delamination rate from each of these 200 methods sections" |
+
+Also `search` (hybrid BM25 + vector), `lookup` (DOI/PMID metadata), `sql`
+(read-only over the documents table).
+
+Each of the six protocols already carries a `paperclip_query`, written when the
+scaffolds were built. They are the shopping list; nothing new needs designing.
+
+### 6.3 Access — user action required
+
+Self-serve, not gated to the hackathon. Per the standing rule, **the credential
+is created and exported by the user, never written on their behalf**:
+
+```bash
+# either — OAuth, no key handling
+paperclip login
+# or — key from paperclip.gxl.ai/keys
+export PAPERCLIP_API_KEY='gxl_...'
+```
+
+Install is `curl -fsSL https://paperclip.gxl.ai/install.sh | bash`, which pipes a
+remote script to the shell; downloading and reading it first is the cautious
+alternative. There is also an MCP endpoint at `https://paperclip.gxl.ai/mcp`
+using an `X-API-Key` header, if calling it as a tool is preferable to shelling
+out.
+
+### 6.4 The harness to build (does not need the credential)
+
+1. **Pluggable calibration source.** `assays/sources.py` — an interface with
+   Paperclip and PubMed backends, so the protocol's existing `paperclip_query`
+   routes to whichever is available. Buildable and testable offline against
+   canned responses.
+2. **Record what PubMed already gave**, with DOI and provenance, in
+   `assays/literature.py`. Tag `LITERATURE`, never `MEASURED`.
+3. **Blocked-reason taxonomy** on each unfilled constant, which is the actual
+   scientific output:
+   - `NOT_REPORTED` — nobody publishes it (the survivorship class)
+   - `UNITS_MISMATCH` — literature reports a different quantity (traction
+     *stress* in pN/µm, where the protocol needs strain *energy* in pJ/cell)
+   - `ASSAY_SPECIFIC` — instrument-relative, not transferable (deposition
+     baselines in arbitrary MFI units)
+   - `CONTEXT_DEPENDENT` — the constant is ill-posed as a scalar. Marinković
+     et al. 2012, [10.1152/ajplung.00108.2012](https://doi.org/10.1152/ajplung.00108.2012),
+     show TGF-β1 raises traction on stiff substrates but **not** at
+     physiological stiffness — so `tgfb_fold_change` for `traction_force` cannot
+     be one number without also specifying substrate modulus
+4. **A `calibrate` CLI subcommand** reporting, per protocol, constants filled /
+   blocked and the reason split.
+
+### 6.5 Expected outcome — state this before running it
+
+Most of the six will **remain SCAFFOLD**, and that is the correct result rather
+than a shortfall. The prediction, recorded in advance so it can be wrong:
+
+- Effect sizes and CVs: mostly findable
+- Failure and attrition rates: mostly not
+- `bleomycin_lung` is the most likely to calibrate fully, because animal welfare
+  reporting forces mortality into the record — the one place the literature is
+  obliged to publish its failures
+- `fibrosis_on_chip` is the least likely: device failure rates are commercially
+  sensitive and n per condition is rarely stated
+
+If that prediction holds, the calibration run *is* a result about the
+literature, not merely a step towards a second case.
