@@ -12,15 +12,23 @@ Two distinct jobs, deliberately given to the model in different ways:
 The brief given to the agent contains only what was knowable BEFORE Experiment
 4 was run. It must never mention fibrinolysis, aprotinin, the observed lysis
 split, or the contraction half-time - those are the answers.
+
+The agent model is a parameter; the extractor model should NOT be varied
+alongside it. See `refute.providers` for why.
 """
 
 from __future__ import annotations
 
-import os
-
 from .design import DesignSpec
+from .providers import DEFAULT_AGENT, DEFAULT_EXTRACTOR, ModelSpec, get_provider
 
-MODEL = "claude-opus-5"
+# Reasoning tokens are charged against these budgets on the GPT-5 families, so
+# they must sit well above the length of the visible answer. Measured, not
+# guessed: the first live run gave gpt-5.5 16k for a proposal and it spent the
+# whole budget thinking, returning empty text. Designing a plate is a long
+# deliberation, so the ceiling is set generously - unused budget is not billed.
+PROPOSE_MAX_TOKENS = 64000
+EXTRACT_MAX_TOKENS = 32000
 
 # Pre-registration only. Everything here was known before casting the plate.
 EXPERIMENT_4_BRIEF = """\
@@ -65,46 +73,33 @@ DESIGN
 """
 
 
-def _client():
-    try:
-        import anthropic
-    except ImportError as exc:  # pragma: no cover
-        raise RuntimeError(
-            "pip install anthropic  (or run with --design to score a hand-written spec)"
-        ) from exc
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        # The SDK also accepts an `ant auth login` profile; only warn if neither.
-        pass
-    return anthropic.Anthropic()
+def propose_design(
+    brief: str = EXPERIMENT_4_BRIEF, agent: ModelSpec = DEFAULT_AGENT
+) -> str:
+    """Ask the agent for a design. Returns free text.
 
-
-def propose_design(brief: str = EXPERIMENT_4_BRIEF, effort: str = "high") -> str:
-    """Ask the agent for a design. Returns free text."""
-    client = _client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=8000,
-        output_config={"effort": effort},
-        messages=[{"role": "user", "content": brief}],
+    This is the measurement. `agent` is the independent variable of the whole
+    benchmark, so it is recorded alongside every score.
+    """
+    return get_provider(agent.provider).complete(
+        [{"role": "user", "content": brief}], agent, PROPOSE_MAX_TOKENS
     )
-    if response.stop_reason == "refusal":
-        raise RuntimeError(f"model declined: {response.stop_details}")
-    return "".join(b.text for b in response.content if b.type == "text")
 
 
-def revise_design(brief: str, previous_design: str, feedback: str) -> str:
+def revise_design(
+    brief: str,
+    previous_design: str,
+    feedback: str,
+    agent: ModelSpec = DEFAULT_AGENT,
+) -> str:
     """Show the agent what the simulator did to its plate; ask for a redesign.
 
     The feedback reports consequences, never corrections - it says the scaffold
     was gone before the endpoint, not 'add aprotinin'. Working out the fix is
     the part under test.
     """
-    client = _client()
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=8000,
-        output_config={"effort": "high"},
-        messages=[
+    return get_provider(agent.provider).complete(
+        [
             {"role": "user", "content": brief},
             {"role": "assistant", "content": previous_design},
             {
@@ -116,28 +111,26 @@ def revise_design(brief: str, previous_design: str, feedback: str) -> str:
                 ),
             },
         ],
+        agent,
+        PROPOSE_MAX_TOKENS,
     )
-    if response.stop_reason == "refusal":
-        raise RuntimeError(f"model declined: {response.stop_details}")
-    return "".join(b.text for b in response.content if b.type == "text")
 
 
-def extract_design(design_text: str) -> DesignSpec:
-    """Free-text design -> DesignSpec. Extraction, not judgement."""
-    client = _client()
-    response = client.messages.parse(
-        model=MODEL,
-        max_tokens=4000,
-        output_config={"effort": "low"},
-        messages=[
-            {
-                "role": "user",
-                "content": EXTRACTION_PROMPT.format(design_text=design_text),
-            }
-        ],
-        output_format=DesignSpec,
+def extract_design(
+    design_text: str, extractor: ModelSpec = DEFAULT_EXTRACTOR
+) -> DesignSpec:
+    """Free-text design -> DesignSpec. Extraction, not judgement.
+
+    HOLD THIS CONSTANT. Varying the extractor alongside the agent confounds
+    design quality with parsing fidelity: a lower score could mean the agent
+    designed worse, or that its prose was read less accurately, and the two are
+    indistinguishable after the fact.
+    """
+    spec = get_provider(extractor.provider).parse(
+        [{"role": "user", "content": EXTRACTION_PROMPT.format(design_text=design_text)}],
+        extractor,
+        EXTRACT_MAX_TOKENS,
+        DesignSpec,
     )
-    spec = response.parsed_output
-    if spec is None:  # pragma: no cover
-        raise RuntimeError("extraction returned no parsed output")
+    assert isinstance(spec, DesignSpec)
     return spec
