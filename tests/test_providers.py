@@ -17,7 +17,11 @@ from refute.providers import (
     ModelSpec,
     OpenAIProvider,
     ProviderError,
+    Usage,
     _is_reasoning_model,
+    _record,
+    ledger_summary,
+    reset_ledger,
     spec_from_string,
 )
 
@@ -82,6 +86,34 @@ def test_extractor_default_is_cheap_and_the_agent_default_is_not():
     forgotten which one is being benchmarked."""
     assert DEFAULT_EXTRACTOR.effort == "low"
     assert DEFAULT_AGENT.effort == "high"
+
+
+def test_ledger_accumulates_per_model():
+    """Cost has to be attributable per model, or a cross-model comparison
+    cannot report what each arm actually cost to produce."""
+    reset_ledger()
+    a = ModelSpec("openai", "gpt-5.5", "high")
+    b = ModelSpec("openai", "gpt-5.5", "low")
+    _record(a, Usage(calls=1, input_tokens=100, output_tokens=50, reasoning_tokens=40))
+    _record(a, Usage(calls=1, input_tokens=200, output_tokens=60, reasoning_tokens=10))
+    _record(b, Usage(calls=1, input_tokens=10, output_tokens=5))
+
+    summary = ledger_summary()
+    assert "gpt-5.5@high" in summary and "gpt-5.5@low" in summary
+
+    from refute.providers import LEDGER
+
+    assert LEDGER[str(a)].calls == 2
+    assert LEDGER[str(a)].input_tokens == 300
+    assert LEDGER[str(a)].reasoning_tokens == 50
+    # Different effort is a different arm, so it must not be merged.
+    assert LEDGER[str(b)].calls == 1
+    reset_ledger()
+
+
+def test_empty_ledger_says_so_rather_than_printing_a_bare_header():
+    reset_ledger()
+    assert "no model calls" in ledger_summary()
 
 
 def test_modelspec_is_hashable_and_prints_legibly():

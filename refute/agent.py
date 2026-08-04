@@ -23,9 +23,12 @@ from .design import DesignSpec
 from .providers import DEFAULT_AGENT, DEFAULT_EXTRACTOR, ModelSpec, get_provider
 
 # Reasoning tokens are charged against these budgets on the GPT-5 families, so
-# they are set well above the length of the visible answer.
-PROPOSE_MAX_TOKENS = 16000
-EXTRACT_MAX_TOKENS = 8000
+# they must sit well above the length of the visible answer. Measured, not
+# guessed: the first live run gave gpt-5.5 16k for a proposal and it spent the
+# whole budget thinking, returning empty text. Designing a plate is a long
+# deliberation, so the ceiling is set generously - unused budget is not billed.
+PROPOSE_MAX_TOKENS = 64000
+EXTRACT_MAX_TOKENS = 32000
 
 # Pre-registration only. Everything here was known before casting the plate.
 EXPERIMENT_4_BRIEF = """\

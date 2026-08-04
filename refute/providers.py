@@ -65,6 +65,52 @@ class ProviderError(RuntimeError):
     """Transport failed, or the model declined. Never a scoring outcome."""
 
 
+@dataclass
+class Usage:
+    """Tokens spent. Reasoning tokens are the surprising term.
+
+    On the first live run, gpt-5.5 at high effort consumed a 16k budget
+    entirely on reasoning and returned no visible text at all - reported as
+    `finish_reason=length` with empty content, which reads like a refusal
+    unless you are counting. Hence this ledger: the benchmark reports what it
+    cost rather than assuming.
+    """
+
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    reasoning_tokens: int = 0
+
+    def add(self, other: "Usage") -> None:
+        self.calls += other.calls
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        self.reasoning_tokens += other.reasoning_tokens
+
+
+LEDGER: dict[str, Usage] = {}
+
+
+def _record(spec: ModelSpec, usage: Usage) -> None:
+    LEDGER.setdefault(str(spec), Usage()).add(usage)
+
+
+def reset_ledger() -> None:
+    LEDGER.clear()
+
+
+def ledger_summary() -> str:
+    if not LEDGER:
+        return "no model calls recorded"
+    rows = [f"{'model':<28} {'calls':>5} {'in':>9} {'out':>9} {'reasoning':>10}"]
+    for name, u in LEDGER.items():
+        rows.append(
+            f"{name:<28} {u.calls:>5} {u.input_tokens:>9,} "
+            f"{u.output_tokens:>9,} {u.reasoning_tokens:>10,}"
+        )
+    return "\n".join(rows)
+
+
 class Provider(Protocol):
     def complete(
         self, messages: list[dict[str, str]], spec: ModelSpec, max_tokens: int
@@ -104,20 +150,36 @@ class OpenAIProvider:
             }
         return {"max_tokens": max_tokens}
 
+    @staticmethod
+    def _usage(r: Any) -> Usage:
+        u = getattr(r, "usage", None)
+        if u is None:
+            return Usage(calls=1)
+        details = getattr(u, "completion_tokens_details", None)
+        return Usage(
+            calls=1,
+            input_tokens=getattr(u, "prompt_tokens", 0) or 0,
+            output_tokens=getattr(u, "completion_tokens", 0) or 0,
+            reasoning_tokens=getattr(details, "reasoning_tokens", 0) or 0,
+        )
+
     def complete(
         self, messages: list[dict[str, str]], spec: ModelSpec, max_tokens: int
     ) -> str:
         r = self._client.chat.completions.create(
             model=spec.model, messages=messages, **self._kwargs(spec, max_tokens)
         )
+        usage = self._usage(r)
+        _record(spec, usage)
         choice = r.choices[0]
         if getattr(choice.message, "refusal", None):
             raise ProviderError(f"model declined: {choice.message.refusal}")
         text = choice.message.content or ""
         if not text.strip():
             raise ProviderError(
-                f"empty response (finish_reason={choice.finish_reason}). "
-                "Usually the token budget was consumed by reasoning - raise max_tokens."
+                f"empty response (finish_reason={choice.finish_reason}); "
+                f"{usage.reasoning_tokens:,} of {max_tokens:,} tokens went to "
+                "reasoning before any visible text. Raise the budget."
             )
         return text
 
@@ -134,6 +196,8 @@ class OpenAIProvider:
             response_format=output_format,
             **self._kwargs(spec, max_tokens),
         )
+        usage = self._usage(r)
+        _record(spec, usage)
         choice = r.choices[0]
         if getattr(choice.message, "refusal", None):
             raise ProviderError(f"model declined: {choice.message.refusal}")
@@ -141,7 +205,8 @@ class OpenAIProvider:
         if parsed is None:
             raise ProviderError(
                 f"structured output returned nothing "
-                f"(finish_reason={choice.finish_reason})"
+                f"(finish_reason={choice.finish_reason}, "
+                f"{usage.reasoning_tokens:,} reasoning tokens)"
             )
         return parsed
 
@@ -150,6 +215,17 @@ class AnthropicProvider:
     """Claude via the messages API."""
 
     name = "anthropic"
+
+    @staticmethod
+    def _usage(r: Any) -> Usage:
+        u = getattr(r, "usage", None)
+        if u is None:
+            return Usage(calls=1)
+        return Usage(
+            calls=1,
+            input_tokens=getattr(u, "input_tokens", 0) or 0,
+            output_tokens=getattr(u, "output_tokens", 0) or 0,
+        )
 
     def __init__(self) -> None:
         try:
@@ -169,6 +245,7 @@ class AnthropicProvider:
             output_config={"effort": spec.effort},
             messages=messages,
         )
+        _record(spec, self._usage(r))
         if r.stop_reason == "refusal":
             raise ProviderError(f"model declined: {r.stop_details}")
         text = "".join(b.text for b in r.content if b.type == "text")

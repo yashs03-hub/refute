@@ -94,7 +94,7 @@ def cmd_providers(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     from .agent import EXPERIMENT_4_BRIEF, extract_design, propose_design, revise_design
-    from .providers import DEFAULT_EXTRACTOR, spec_from_string
+    from .providers import DEFAULT_EXTRACTOR, ledger_summary, spec_from_string
 
     agent = spec_from_string(args.agent, args.agent_effort)
     extractor = (
@@ -112,6 +112,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     _print("SIMULATED", score.summary())
 
     if args.no_revise:
+        _print("TOKENS", ledger_summary())
         return 0
 
     feedback = feedback_for_agent(score)
@@ -129,6 +130,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         f"lysed      {score.mean_lysed_fraction:.0%} -> "
         f"{revised_score.mean_lysed_fraction:.0%}",
     )
+    _print("TOKENS", ledger_summary())
     return 0
 
 
