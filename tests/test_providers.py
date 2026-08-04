@@ -14,12 +14,14 @@ import pytest
 from refute.providers import (
     DEFAULT_AGENT,
     DEFAULT_EXTRACTOR,
+    KNOWN_TPM,
     ModelSpec,
     OpenAIProvider,
     ProviderError,
     Usage,
     _is_reasoning_model,
     _record,
+    _suggested_wait,
     ledger_summary,
     reset_ledger,
     spec_from_string,
@@ -86,6 +88,28 @@ def test_extractor_default_is_cheap_and_the_agent_default_is_not():
     forgotten which one is being benchmarked."""
     assert DEFAULT_EXTRACTOR.effort == "low"
     assert DEFAULT_AGENT.effort == "high"
+
+
+def test_defaults_do_not_share_a_rate_limit_pool():
+    """Rate limits are per model. Running proposal and extraction on the same
+    model means the proposal exhausts the minute and extraction 429s - the
+    observed failure on the first working run."""
+    assert DEFAULT_AGENT.model != DEFAULT_EXTRACTOR.model
+    assert KNOWN_TPM[DEFAULT_EXTRACTOR.model] > KNOWN_TPM[DEFAULT_AGENT.model]
+
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        ("Rate limit reached ... Please try again in 12.168s. Visit ...", 12.168),
+        ("try again in 0.5s", 0.5),
+        ("no hint here", None),
+    ],
+)
+def test_retry_wait_is_read_from_the_api_message(message, expected):
+    """The 429 body states the wait. Guessing an exponential backoff instead
+    either stalls longer than needed or hammers a limit that has not reset."""
+    assert _suggested_wait(message) == expected
 
 
 def test_ledger_accumulates_per_model():

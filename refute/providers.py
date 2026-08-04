@@ -25,8 +25,10 @@ Nothing here decides whether a design is good. These are transport only.
 from __future__ import annotations
 
 import os
+import re
+import time
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from pydantic import BaseModel
 
@@ -47,8 +49,32 @@ class ModelSpec:
 
 # Defaults. The agent default is deliberately a strong general model; the
 # extractor default is fixed and should not be varied casually - see module docs.
+#
+# The extractor sits on a DIFFERENT model from the agent on purpose, and it is
+# not only a cost decision. Rate limits are per-model pools: gpt-5.5 allows
+# 10k tokens/min on this account while gpt-5.4-mini allows 100k. Sharing one
+# model between proposal and extraction means the proposal exhausts the minute
+# and the extraction 429s immediately - which is exactly what happened on the
+# first working run. Separate models, separate pools.
+#
+# CAVEAT: a smaller extractor is only acceptable if it parses faithfully.
+# That is not yet established - it is what the adversarial extraction set
+# (PLAN item 4) exists to test. Until that passes, treat extraction fidelity
+# as the leading suspect for any surprising score.
 DEFAULT_AGENT = ModelSpec("openai", "gpt-5.5", "high")
-DEFAULT_EXTRACTOR = ModelSpec("openai", "gpt-5.5", "low")
+DEFAULT_EXTRACTOR = ModelSpec("openai", "gpt-5.4-mini", "low")
+
+# Observed 2026-08-04. Not authoritative - the API headers are - but enough to
+# explain why a benchmark run is slow rather than broken.
+KNOWN_TPM = {
+    "gpt-5.5": 10_000,
+    "gpt-5.4": 10_000,
+    "gpt-5.2": 10_000,
+    "gpt-5.4-mini": 100_000,
+    "o4-mini": 100_000,
+    "gpt-5.4-nano": 60_000,
+    "gpt-5-nano": 40_000,
+}
 
 ANTHROPIC_AGENT = ModelSpec("anthropic", "claude-opus-5", "high")
 
@@ -86,6 +112,42 @@ class Usage:
         self.input_tokens += other.input_tokens
         self.output_tokens += other.output_tokens
         self.reasoning_tokens += other.reasoning_tokens
+
+
+_RETRY_HINT = re.compile(r"try again in ([\d.]+)s")
+
+
+def _suggested_wait(message: str) -> float | None:
+    """The 429 body states how long to wait. Prefer it over guessing."""
+    m = _RETRY_HINT.search(message)
+    return float(m.group(1)) if m else None
+
+
+def with_retry(fn: Callable[[], Any], attempts: int = 6, verbose: bool = True) -> Any:
+    """Retry on rate limits, honouring the wait the API asks for.
+
+    A 10k TPM ceiling means one high-effort proposal can consume an entire
+    minute's budget, so 429s here are the normal operating regime rather than
+    an error condition - the benchmark is throughput-bound, not broken.
+    """
+    try:
+        from openai import RateLimitError
+    except ImportError:  # pragma: no cover
+        return fn()
+
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except RateLimitError as exc:
+            if attempt == attempts - 1:
+                raise ProviderError(
+                    f"rate limited after {attempts} attempts: {exc}"
+                ) from exc
+            wait = _suggested_wait(str(exc)) or min(60.0, 5.0 * 2**attempt)
+            if verbose:
+                print(f"  [rate limited, waiting {wait + 1:.0f}s]", flush=True)
+            time.sleep(wait + 1.0)
+    raise ProviderError("unreachable")  # pragma: no cover
 
 
 LEDGER: dict[str, Usage] = {}
@@ -166,8 +228,10 @@ class OpenAIProvider:
     def complete(
         self, messages: list[dict[str, str]], spec: ModelSpec, max_tokens: int
     ) -> str:
-        r = self._client.chat.completions.create(
-            model=spec.model, messages=messages, **self._kwargs(spec, max_tokens)
+        r = with_retry(
+            lambda: self._client.chat.completions.create(
+                model=spec.model, messages=messages, **self._kwargs(spec, max_tokens)
+            )
         )
         usage = self._usage(r)
         _record(spec, usage)
@@ -190,11 +254,13 @@ class OpenAIProvider:
         max_tokens: int,
         output_format: type[BaseModel],
     ) -> BaseModel:
-        r = self._client.chat.completions.parse(
-            model=spec.model,
-            messages=messages,
-            response_format=output_format,
-            **self._kwargs(spec, max_tokens),
+        r = with_retry(
+            lambda: self._client.chat.completions.parse(
+                model=spec.model,
+                messages=messages,
+                response_format=output_format,
+                **self._kwargs(spec, max_tokens),
+            )
         )
         usage = self._usage(r)
         _record(spec, usage)
