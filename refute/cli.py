@@ -94,6 +94,87 @@ def cmd_assays(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    """Report what literature calibration recovered, and what it did not.
+
+    The split is computed from the protocol's own structure rather than a
+    hand-kept list: readout constants are what the assay measures, hazard and
+    attrition constants are how it breaks. If the second column stays empty as
+    the corpus grows, that is the result.
+    """
+    from .assays import REGISTRY
+    from .assays.evidence import BlockedReason
+    from .assays.literature import NOT_ATTEMPTED, REPORTS
+    from .assays.sources import get_source
+
+    src = get_source(args.source)
+    lines = [f"source: {src.name}"]
+    if reason := src.why_unavailable():
+        lines.append(f"  unavailable: {reason}")
+    lines.append("")
+
+    if args.key:
+        report = REPORTS.get(args.key)
+        if report is None:
+            lines.append(f"no calibration attempted for '{args.key}'")
+        else:
+            lines.append(report.summary())
+        _print(f"CALIBRATION: {args.key}", "\n".join(lines))
+        return 0
+
+    readout_found = readout_total = fail_found = fail_total = 0
+    reasons: dict[BlockedReason, int] = {}
+
+    lines.append(f"{'protocol':<22} {'measured':>9} {'failure':>9}  status")
+    for p in REGISTRY.values():
+        if p.status.value == "measured":
+            continue
+        readout_names = {c.name for c in p.readout.constants}
+        report = REPORTS.get(p.key)
+        if report is None:
+            lines.append(f"{p.key:<22} {'-':>9} {'-':>9}  not attempted")
+            continue
+        found = {e.constant for e in report.found}
+        r_tot = f_tot = r_hit = f_hit = 0
+        for c in p.all_constants():
+            is_readout = c.name in readout_names
+            hit = c.name in found
+            if is_readout:
+                r_tot += 1; r_hit += hit
+            else:
+                f_tot += 1; f_hit += hit
+        for b in report.blocked:
+            reasons[b.reason] = reasons.get(b.reason, 0) + 1
+        readout_found += r_hit; readout_total += r_tot
+        fail_found += f_hit; fail_total += f_tot
+        lines.append(
+            f"{p.key:<22} {f'{r_hit}/{r_tot}':>9} {f'{f_hit}/{f_tot}':>9}"
+            f"  {report.recovery_rate:.0%} overall"
+        )
+
+    missing = [k for k in NOT_ATTEMPTED if k not in REGISTRY]
+    for key in missing:  # listed in literature.py but absent from the registry
+        lines.append(f"{key:<22} {'-':>9} {'-':>9}  not attempted (unregistered)")
+
+    lines += ["", "THE ASYMMETRY"]
+    lines.append(
+        f"  what the assay measures : {readout_found}/{readout_total} recovered"
+    )
+    lines.append(
+        f"  how the assay breaks    : {fail_found}/{fail_total} recovered"
+    )
+    lines += ["", "why the rest are blocked:"]
+    for reason, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
+        lines.append(f"  {reason.value:<20} {n}")
+    lines += [
+        "",
+        "NOT_YET_SEARCHED is not a claim. Only NOT_REPORTED asserts the",
+        "literature is silent, and it is refused without a recorded query.",
+    ]
+    _print("CALIBRATION", "\n".join(lines))
+    return 0
+
+
 def cmd_sweep(args: argparse.Namespace) -> int:
     """The two failures are separable - show that they must both be fixed."""
     rows = []
@@ -217,6 +298,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_assays.add_argument("--key", help="show one protocol in detail")
     p_assays.set_defaults(func=cmd_assays)
+
+    p_cal = sub.add_parser(
+        "calibrate", parents=[common], help="what literature calibration recovered"
+    )
+    p_cal.add_argument("--key", help="show one protocol's attempt in detail")
+    p_cal.add_argument(
+        "--source", default="auto", choices=("auto", "paperclip", "recorded")
+    )
+    p_cal.set_defaults(func=cmd_calibrate)
 
     sub.add_parser(
         "providers", parents=[common], help="which models are callable right now"
