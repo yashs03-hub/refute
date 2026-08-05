@@ -24,11 +24,12 @@ thousands of papers" — is the §6 calibration almost verbatim.
 | `assays/` — protocol registry behind a calibration gate | ✅ done (PR #2) |
 | `providers.py` — OpenAI + Anthropic behind one interface | ✅ done (PR #3) |
 | `agent.py` — propose / revise / extract | ✅ **run live, end to end** |
-| `tests/` — 62 passing | ✅ done |
-| `cli.py` — `baseline` · `sweep` · `assays` · `providers` · `run` | ✅ done |
-| Calibrating the six tier-1 scaffolds | ⬜ **blocked on Paperclip credential — see §6** |
+| `assays/evidence.py` · `sources.py` · `literature.py` — calibration harness | ✅ done |
+| `tests/` — 88 passing | ✅ done |
+| `cli.py` — `baseline` · `sweep` · `assays` · `calibrate` · `providers` · `run` | ✅ done |
+| Calibrating the six tier-1 scaffolds | ⬜ harness built; **blocked on Paperclip credential — see §6, §7.1** |
 | Optimizer — cheapest design meeting a power target | ⬜ not started; `sweep` is a grid, not a search |
-| Adversarial extraction set (5 designs, known specs) | ⬜ not started — see below |
+| Adversarial extraction set (5 designs, known specs) | ⬜ not started — **pre-flight item, §7.1** |
 | Second case (qPCR artifact) | ⬜ not started — needs owner's go-ahead |
 | Uncertainty propagation over calibration params | ⬜ not started |
 | Proto integration | ❌ **resolved: do not build** — Proto is sequence-typed (§2) |
@@ -420,3 +421,75 @@ than a shortfall. The prediction, recorded in advance so it can be wrong:
 
 If that prediction holds, the calibration run *is* a result about the
 literature, not merely a step towards a second case.
+
+---
+
+## 7. Run sheet — 15–16 Aug 2026
+
+The event supplies three things unobtainable at home: Paperclip at corpus
+scale, researchers from Arc and the Biohub to argue with, and judges. Anything
+needing none of those should be finished before boarding.
+
+### 7.1 Pre-flight (by 14 Aug)
+
+| # | Item | Why it cannot wait |
+|---|---|---|
+| 1 | Calibration harness — `evidence.py`, `sources.py`, `literature.py`, `refute calibrate` | ✅ done. Paperclip is now a credential away, not a build |
+| 2 | **Paperclip credential, and the six queries run once** | If `grep`/`map` behave unlike the docs, find out on the 6th, not the 15th. `PaperclipSource.parse` is written against an unverified schema and is the first thing to suspect |
+| 3 | **Adversarial extraction set** — 5 designs, known specs | Extraction is the one unvalidated component. A headline number that might be a parsing bug cannot be presented |
+| 4 | **Pre-record an agent run** | 10k TPM on frontier models means a live `run` is a 3-minute silence with a real chance of a 429 on venue wifi |
+| 5 | Decide the patent question | Presentation is disclosure; UK/EPO have no grace period. This already caught `versionCTRL` |
+
+### 7.2 Day 1 (Sat) — build the dataset
+
+**Scale past the six.** Six assays and 35 constants is a case study. Track B
+asks for "the pattern no single paper could show you", which needs a corpus:
+sample 50–100 fibrosis assay papers and measure the reporting asymmetry across
+all of them.
+
+> Across N papers and M constants: effect sizes recoverable in X%, precision
+> estimates in Y%, **failure and attrition rates in Z%.**
+
+The six protocols become worked examples; the sweep becomes the finding.
+
+- **Morning** — credential live, run the queries, bulk extraction via `map`
+- **Afternoon** — classify every miss into the taxonomy. The classification
+  *is* the dataset. Hold the NOT_REPORTED / NOT_YET_SEARCHED line: the harness
+  refuses the first without a recorded query, and that refusal is what makes
+  the headline defensible
+- **Evening** — wire recovered constants in; check whether any scaffold becomes
+  runnable. Standing bet: `bleomycin_lung`, because welfare reporting obliges
+  authors to publish deaths
+
+### 7.3 Day 2 (Sun) — make it mean something
+
+- **Morning** — if a second assay calibrated, run the agent loop against it.
+  Does the finding replicate on an assay that is not ours? That is the
+  difference between "my experiment failed" and "this generalises"
+- **Midday** — package as a BenchFlow environment if time allows (§2). Twin →
+  environment, `DesignSpec` → action space, `score_design` → reward
+- **Afternoon** — freeze. README, rehearse, stop building
+
+### 7.4 The demo
+
+1. A real experiment that failed, with the data — 30 s
+2. `refute baseline` **live** — 0% power, 50% of wells lysed. Instant, no network
+3. `refute sweep` **live** — the two defects are separable; neither fix alone works
+4. `refute calibrate` **live** — the asymmetry, in one table
+5. The agent result, **pre-recorded** — 0% → 97% testable, still 9% power.
+   Unanswerable on one plate
+
+Lead with the absence, not the extraction. Recovered constants read as
+literature mining; what the literature systematically omits is a finding.
+
+Nothing in steps 2–4 needs a network, a key, or sponsor compute. The demo
+cannot die on venue infrastructure.
+
+### 7.5 Questions to have answered before they are asked
+
+| Question | Answer |
+|---|---|
+| "Isn't this a virtual cell?" (Arc affiliates two of seven co-hosts) | A virtual cell predicts the biology; this models the apparatus. A perfect virtual cell still will not tell you the gel dissolves on day 7, that the most-treated arm fails first, or that segmentation noise means you needed 50 wells |
+| "Why not build it in BenchFlow?" | It probably should live there. The harness was never the hard part — a reward signal that is not another model's opinion was |
+| "Why not use Proto?" | Its primitives are sequence-typed (§2). The analogy is worth stating; the dependency is not worth having |
+| "One plate is not a benchmark." | Correct, and stated first. The alternative on offer is zero plates. Every literature-built benchmark is trained on survivors; this is calibrated on an experiment that was never published |
