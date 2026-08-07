@@ -301,6 +301,7 @@ working artefact that motivates it and gives the dataset a use.
 | ~~Proto integration turns out to be a dead end mid-build~~ | **Retired 2026-08-04** — checked and it is one. Proto is sequence-typed, so nothing was built on it. The risk cost nothing because the check happened before the architecture |
 | **"Why not just build this in BenchFlow?"** — asked by a BenchFlow judge | Agree, and say so first: it probably *should* live there. The harness was never the hard part; a reward signal that is not another model's opinion was. `refute` contributes the scorer, BenchFlow contributes the distribution |
 | Track B entry is judged as a literature-mining exercise | Lead with the absence, not the extraction. The dataset's value is which constants are *missing* and the pattern in which ones — a claim about publishing practice that no single paper can support |
+| Judged as sitting out the safety conversation the week AI-designed phages hit the news | §8. The architecture already takes a position — generator never verifies itself, fails closed, silence is not evidence — and took it before the news. Reframe, do not pivot; the reasons not to pivot are recorded so they are not re-argued on the day |
 | Public presentation is a patent disclosure | UK/EPO have no grace period — the same trap already hit `versionCTRL`. Make it a conscious decision before the 15th, not a discovery after |
 
 ---
@@ -493,3 +494,89 @@ cannot die on venue infrastructure.
 | "Why not build it in BenchFlow?" | It probably should live there. The harness was never the hard part — a reward signal that is not another model's opinion was |
 | "Why not use Proto?" | Its primitives are sequence-typed (§2). The analogy is worth stating; the dependency is not worth having |
 | "One plate is not a benchmark." | Correct, and stated first. The alternative on offer is zero plates. Every literature-built benchmark is trained on survivors; this is calibrated on an experiment that was never published |
+| "AI just designed working viruses — why aren't you working on *that*?" | §8 |
+
+---
+
+## 8. The verification gap — framing, not a pivot
+
+Added 2026-08-07, eight days out, after the Hie lab's generative-phage work
+reached mainstream coverage (CNN, Axios, 6 Aug). The preprint is from Sept 2025;
+the *attention* is this week. Arc co-hosts this event, so the question will be
+in the room whether or not it is asked out loud.
+
+**The result:** Evo 1 + Evo 2, fine-tuned on Microviridae and prompted with
+ΦX174, produced ~300 whole-genome designs; 16 were viable phages that infect and
+kill *E. coli*. Human- and animal-infecting viruses were excluded from training,
+and the work was run under containment beyond the standard requirement.
+
+**The criticism that matters** is not "they made a virus". It is the specific
+one from Johns Hopkins biosecurity: existing synthetic-DNA order screening
+**cannot detect sequences of this kind**. The generator moved; the verifier did
+not. That is a claim about who checks the output, and it is the same claim this
+project makes.
+
+### 8.1 Why this is not a pivot
+
+Recorded so the decision is not re-litigated on the day:
+
+- **Wrong layer.** The gap identified is nucleotide-similarity screening. The
+  twin is a mechanistic model of a fibrin gel. There is no bridge — the same
+  reasoning that retired the Proto integration in §2.
+- **It would require inventing ground truth.** There is no calibration set for
+  a biosecurity classifier reachable in eight days. Building one would mean
+  switching off `UncalibratedAssayError` first — i.e. abandoning §6's central
+  correctness property to build the thing §6 exists to criticise.
+- **Well-resourced incumbents.** SecureDNA, IBBIS, NTI\|bio, the IGSC screening
+  consortium. A two-day build loses, and loses in public.
+- **It reads badly.** A hastily-assembled biosecurity project at Arc's own
+  hackathon, days after their work drew criticism, is either opportunism or an
+  implied rebuke of the hosts. The framing below is neither.
+
+### 8.2 What is already true and should be said
+
+`refute`'s architecture is a position on exactly this question, and it was
+taken before the news:
+
+| Property | Where it lives | Why it is the point |
+|---|---|---|
+| The generator is never its own verifier | "the LLM extracts, the simulator judges" (§1) | The separation that failed in the phage case |
+| It fails closed | `UncalibratedAssayError`, tested | Refuses to score what it cannot vouch for, instead of returning a confident number |
+| Silence is not evidence | `BlockedReason.is_a_claim_about_the_literature` | `NOT_REPORTED` requires a recorded query, or it raises |
+| "No" is a valid verdict | the infeasibility diagnosis in `score.py` | *the question cannot be answered at this scale — a legitimate answer, not a failure* |
+
+A verification layer that cannot decline to vouch for something is not one.
+
+### 8.3 The line worth having ready
+
+> The conversation is about **malicious** AI-designed biology. The far more
+> common failure is **incompetent** AI-designed biology — an agent proposing an
+> experiment that cannot answer its own question, and nobody catching it because
+> there is no simulator in the loop. That failure is measurable, and this
+> measures it against primary data.
+
+The headline result is the evidence, unchanged: gpt-5.5 reproduced both defects
+of a real experiment; consequence-feedback took it 0% → 97% testable; and the
+honest verdict was still that **no design available on one plate can answer the
+question.** A capable model confidently proposed an experiment that could not
+work — the same shape as the phage story, at a scale where the answer is
+checkable.
+
+### 8.4 The asymmetry, read a second way
+
+§6's finding — *what the assay measures: 2/9 recovered · how the assay breaks:
+0/10* — is a biosecurity-shaped result in disguise. The literature records
+capability and omits failure modes. That is precisely why verification lagged
+generation: the corpus training everyone's intuitions about what goes wrong is
+thin by construction. Worth one sentence in the Track B pitch; it costs nothing
+and it generalises the finding past fibrosis assays.
+
+### 8.5 One thing to say about this project's own errors
+
+Both scorer bugs found on 2026-08-05 were **false negatives** — the harness
+called a design broken when it was not. A verifier wrong in the permissive
+direction is the dangerous one. Ours was wrong in the conservative direction,
+which is why the tests missed it and why it was safe to ship. Name the
+asymmetry rather than hiding the bugs; it is the more credible position.
+
+**Scope: nothing in §8 changes code.** Track B, §6 and §7 are unaffected.
