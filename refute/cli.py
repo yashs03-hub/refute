@@ -230,6 +230,163 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_baselines(args: argparse.Namespace) -> int:
+    """Score the reference designs, so an agent's number has a scale."""
+    from .baselines import BASELINES, CEILING, sanity_check
+
+    sanity_check()
+    CEILING_REPS = CEILING.replicates_per_condition
+
+    rows = []
+    for b in BASELINES:
+        s = score_design(b.design, n_sims=args.sims)
+        rows.append((b, s))
+
+    header = (
+        f"{'design':>8} {'wells':>6} {'power':>7} {'testable':>9} "
+        f"{'lysed':>7} {'n/arm needed':>13} {'verdict':>12}"
+    )
+    lines = [header]
+    for b, s in rows:
+        lines.append(
+            f"{b.key:>8} {b.design.total_wells:>6} {s.power:>6.0%} "
+            f"{s.testable_rate:>9.0%} {s.mean_lysed_fraction:>7.0%} "
+            f"{(s.replicates_needed if s.replicates_needed > 0 else '-'):>13} "
+            f"{s.feasibility:>12}"
+        )
+
+    expert = next(s for b, s in rows if b.key == "expert")
+    ceiling = next(s for b, s in rows if b.key == "ceiling")
+
+    lines += ["", "what each one is for:"]
+    lines += [f"  {b.key:<8} {b.question}" for b, _ in rows]
+
+    # The point of the table, stated rather than left for the reader to infer.
+    lines += ["", "reading:"]
+    if expert.power < 0.8:
+        lines.append(
+            f"  EXPERT spends the whole plate, protects the scaffold and samples "
+            f"the kinetics,\n  and still reaches only {expert.power:.0%} power. It "
+            f"was written with hindsight the\n  agent is denied, so the ceiling on "
+            f"one plate is a fact about the apparatus,\n  not a verdict on any "
+            f"agent."
+        )
+    else:
+        lines.append(
+            f"  EXPERT reaches {expert.power:.0%} power on one plate, so the "
+            "apparatus is sufficient\n  and a low agent score is the agent's."
+        )
+    lines.append(
+        f"  CEILING is the same design at n={CEILING_REPS}, over capacity by "
+        f"design: {ceiling.power:.0%} power.\n  The constraint is the plate, and "
+        "that is what it costs. The twin has no\n  between-plate calibration, so "
+        "read it as an optimistic bound."
+    )
+    lines.append(
+        "\n  Compare any agent against EXPERT, not against AS_RUN. Beating a "
+        "design that\n  scored zero is not evidence of anything."
+    )
+
+    _print("BASELINES", "\n".join(lines))
+    return 0
+
+
+def cmd_check_extraction(args: argparse.Namespace) -> int:
+    """Validate the extractor against designs whose specs are known.
+
+    Extraction sits directly upstream of every score, so a parsing failure is
+    indistinguishable from a design failure after the fact. This is the only
+    check that separates them, and it costs one cheap model call per case.
+    """
+    from .agent import extract_design
+    from .extraction_cases import CASES, check
+    from .providers import DEFAULT_EXTRACTOR, ledger_summary, spec_from_string
+
+    extractor = (
+        spec_from_string(args.extractor, "low") if args.extractor else DEFAULT_EXTRACTOR
+    )
+    print(f"extractor {extractor}\ncases     {len(CASES)}\n")
+
+    results = []
+    for case in CASES:
+        try:
+            spec = extract_design(case.prose, extractor=extractor)
+        except Exception as exc:
+            results.append((case, None, f"{type(exc).__name__}: {exc}"))
+            print(f"  {case.key:<24} ERROR  {type(exc).__name__}")
+            continue
+        result = check(case, spec)
+        results.append((case, result, None))
+        print(f"  {case.key:<24} {'ok' if result.passed else 'FAIL':<6} "
+              f"probes: {', '.join(case.probes)}")
+        for m in result.mismatches:
+            print(f"      - {m}")
+
+    ok = sum(1 for _, r, e in results if e is None and r and r.passed)
+    lines = [f"{ok}/{len(CASES)} cases extracted correctly", ""]
+    if ok == len(CASES):
+        lines.append(
+            "Extraction is not the explanation for any score in this repo. State "
+            "this\nalongside the headline number - it is the difference between a "
+            "result and\na number that might be a parsing bug."
+        )
+    else:
+        lines.append(
+            "Extraction is NOT clean. Until these pass, any score could be a "
+            "parsing\nfailure rather than a design failure, and the two are "
+            "indistinguishable\nafter the fact. Fix the prompt or narrow the "
+            "claim; do not quote the\nheadline number as though it were "
+            "validated."
+        )
+    _print("EXTRACTION CHECK", "\n".join(lines))
+    _print("TOKENS", ledger_summary())
+    return 0 if ok == len(CASES) else 1
+
+
+def cmd_replay(args: argparse.Namespace) -> int:
+    """Re-score a recorded agent run. No credential, no network."""
+    from .record import RecordedRun
+
+    run = RecordedRun.load(args.path)
+    header = (
+        f"agent     {run.agent}\n"
+        f"extractor {run.extractor}\n"
+        f"recorded  {run.recorded_at or 'unknown'}\n"
+        f"rounds    {len(run.rounds)}"
+    )
+    if run.notes:
+        header += f"\nnotes     {run.notes}"
+    _print("RECORDED RUN", header)
+
+    scores = []
+    for i, rnd in enumerate(run.rounds, start=1):
+        try:
+            score = score_design(rnd.extracted, n_sims=args.sims)
+        except OutOfTwinScopeError as exc:
+            _report_out_of_scope(exc)
+            return 2
+        scores.append(score)
+        label = "PROPOSED" if i == 1 else f"REVISED (round {i})"
+        if args.verbose:
+            _print(f"{label} - DESIGN TEXT", rnd.design_text)
+        _print(f"{label} - EXTRACTED", rnd.extracted.model_dump_json(indent=2))
+        _print(f"{label} - SIMULATED", score.summary())
+
+    if len(scores) >= 2:
+        first, last = scores[0], scores[-1]
+        _print(
+            "DELTA",
+            f"power      {first.power:.0%} -> {last.power:.0%}\n"
+            f"testable   {first.testable_rate:.0%} -> {last.testable_rate:.0%}\n"
+            f"lysed      {first.mean_lysed_fraction:.0%} -> "
+            f"{last.mean_lysed_fraction:.0%}\n"
+            f"n/arm needed {first.replicates_needed} -> {last.replicates_needed}\n\n"
+            "Scores are recomputed against the current twin, not read back from "
+            "the file,\nso this reflects the calibration in force now.",
+        )
+    return 0
+
+
 def cmd_providers(args: argparse.Namespace) -> int:
     """What can actually be called right now, and why not if it can't."""
     from .providers import DEFAULT_AGENT, DEFAULT_EXTRACTOR, available
@@ -252,8 +409,11 @@ def cmd_providers(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
     from .agent import EXPERIMENT_4_BRIEF, extract_design, propose_design, revise_design
     from .providers import DEFAULT_EXTRACTOR, ledger_summary, spec_from_string
+    from .record import RecordedRound, RecordedRun
 
     agent = spec_from_string(args.agent, args.agent_effort)
     extractor = (
@@ -261,11 +421,29 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     print(f"agent     {agent}\nextractor {extractor}  (held constant)\n")
 
+    # Recorded unconditionally. A paid run whose prose is not kept cannot be
+    # re-scored after a calibration change, which is how the first live result's
+    # headline number became unquotable rather than merely stale.
+    record = RecordedRun(
+        agent=str(agent),
+        extractor=str(extractor),
+        brief=EXPERIMENT_4_BRIEF,
+        recorded_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+
+    def save_record() -> None:
+        if not args.record:
+            return
+        path = record.save(args.record)
+        print(f"[recorded {len(record.rounds)} round(s) -> {path}]\n")
+
     design_text = propose_design(agent=agent)
     _print("PROPOSED DESIGN", design_text)
 
     spec = extract_design(design_text, extractor=extractor)
     _print("EXTRACTED SPEC", spec.model_dump_json(indent=2))
+    record.rounds.append(RecordedRound(design_text=design_text, extracted=spec))
+    save_record()  # written before scoring, so a scorer crash cannot lose the run
 
     try:
         score = score_design(spec, n_sims=args.sims)
@@ -283,11 +461,16 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 0
 
     feedback = feedback_for_agent(score)
+    record.rounds[-1].feedback_given = feedback
     revised_text = revise_design(EXPERIMENT_4_BRIEF, design_text, feedback, agent=agent)
     _print("REVISED DESIGN", revised_text)
 
     revised_spec = extract_design(revised_text, extractor=extractor)
     _print("EXTRACTED SPEC (revised)", revised_spec.model_dump_json(indent=2))
+    record.rounds.append(
+        RecordedRound(design_text=revised_text, extracted=revised_spec)
+    )
+    save_record()
 
     try:
         revised_score = score_design(revised_spec, n_sims=args.sims)
@@ -329,6 +512,29 @@ def main(argv: list[str] | None = None) -> int:
         "sweep", parents=[common], help="antifibrinolytic x replicates grid"
     ).set_defaults(func=cmd_sweep)
 
+    sub.add_parser(
+        "baselines",
+        parents=[common],
+        help="score the reference designs, so an agent's number has a scale",
+    ).set_defaults(func=cmd_baselines)
+
+    p_check = sub.add_parser(
+        "check-extraction",
+        parents=[common],
+        help="validate the extractor against designs with known specs",
+    )
+    p_check.add_argument("--extractor", help="override the extractor model")
+    p_check.set_defaults(func=cmd_check_extraction)
+
+    p_replay = sub.add_parser(
+        "replay", parents=[common], help="re-score a recorded run (no API key needed)"
+    )
+    p_replay.add_argument("path", help="path to a recorded run JSON file")
+    p_replay.add_argument(
+        "--verbose", action="store_true", help="also print the agent's prose"
+    )
+    p_replay.set_defaults(func=cmd_replay)
+
     p_assays = sub.add_parser(
         "assays", parents=[common], help="list assay protocols and calibration status"
     )
@@ -352,6 +558,11 @@ def main(argv: list[str] | None = None) -> int:
         "run", parents=[common], help="propose -> simulate -> revise (needs API key)"
     )
     p_run.add_argument("--no-revise", action="store_true")
+    p_run.add_argument(
+        "--record",
+        metavar="PATH",
+        help="save the run to JSON so it can be replayed and re-scored later",
+    )
     p_run.add_argument(
         "--agent",
         default="openai:gpt-5.5",

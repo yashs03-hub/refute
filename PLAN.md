@@ -25,15 +25,20 @@ thousands of papers" — is the §6 calibration almost verbatim.
 | `providers.py` — OpenAI + Anthropic behind one interface | ✅ done (PR #3) |
 | `agent.py` — propose / revise / extract | ✅ **run live, end to end** |
 | `assays/evidence.py` · `sources.py` · `literature.py` — calibration harness | ✅ done |
-| `tests/` — 88 passing | ✅ done |
-| `cli.py` — `baseline` · `sweep` · `assays` · `calibrate` · `providers` · `run` | ✅ done |
+| `baselines.py` — as-run / naive / expert / ceiling references | ✅ done — gives an agent's score a scale (§9.6) |
+| `environment.py` — `RefuteEnv`, the benchmark as an environment | ✅ done (§9.4) |
+| `api.py` — `/score` · `/score/text` · `/run` · `/assays` | ✅ done (§9.4) |
+| `record.py` — serialise and replay an agent run | ✅ done — the demo no longer needs a network |
+| `extraction_cases.py` — 5 adversarial designs, known specs | ✅ done, and **5/5 pass live** |
+| `tests/` — 186 passing, 5 live-only skipped | ✅ done |
+| `cli.py` — `baseline` · `baselines` · `sweep` · `assays` · `calibrate` · `check-extraction` · `replay` · `providers` · `run` | ✅ done |
 | Calibrating the six tier-1 scaffolds | ⬜ harness built; **blocked on Paperclip credential — see §6, §7.1** |
-| Optimizer — cheapest design meeting a power target | ⬜ not started; `sweep` is a grid, not a search |
-| Adversarial extraction set (5 designs, known specs) | ⬜ not started — **pre-flight item, §7.1** |
+| Optimizer — cheapest design meeting a power target | ⬜ not started; `sweep` is a grid, not a search. **Goodhart applies once it lands — §9.1** |
+| Record a real agent run to `cases/exp4/runs/` | ⬜ infrastructure done; **needs one paid run — the only step left on §7.1 item 4** |
 | Second case (qPCR artifact) | ⬜ not started — needs owner's go-ahead |
-| Uncertainty propagation over calibration params | ⬜ not started |
+| Uncertainty propagation over calibration params | 🟡 partial — ASSUMED constants swept at scoring time (§9.1); FITTED ones not yet |
 | Proto integration | ❌ **resolved: do not build** — Proto is sequence-typed (§2) |
-| BenchFlow packaging — `refute` as an eval environment | ⬜ not started — likely the right home (§2) |
+| BenchFlow packaging — `refute` as an eval environment | 🟡 `RefuteEnv` is the interface; packaging as their environment not done (§2) |
 
 PRs #1–#3 merged 2026-08-04. The loop runs: propose → extract → simulate →
 revise → extract → simulate, against `openai:gpt-5.5`.
@@ -45,6 +50,20 @@ plate (2×6), added a pre-treatment baseline and flagged scaffold failure:
 testable 0% → 97%. Power still only reached 9%, with ~57 wells/arm required.
 **Even the best design available on one plate cannot answer the question** —
 that verdict is the finding.
+
+> ⚠️ **`~57 wells/arm` is superseded and cannot be recomputed.** A non-robust
+> variance estimator was fixed on 2026-08-10 (§9.5); it roughly halved every
+> required-replication estimate. The as-run design went 50 → **20**, and
+> `EXPERT` — the same 2-arm, n=6, aprotinin, Day-7 shape the agent converged on —
+> needs **29**. The agent's revised spec was never serialised, so its own number
+> cannot be recalculated: this is precisely the cost of §7.1 item 4 being
+> outstanding. **Quote 9% power and 0% → 97% testable, which are unaffected; do
+> not quote 57 until the run is replayed.**
+>
+> The finding itself is untouched. `refute baselines` now demonstrates it more
+> directly than the agent run does: `EXPERT`, hand-written with full hindsight,
+> reaches 9% power on one plate, and `CEILING` — the same design with the plate
+> limit lifted — reaches 83%. The constraint is the apparatus.
 
 **The live runs found three bugs, two of them in the scorer, not the agent:**
 
@@ -484,10 +503,11 @@ needing none of those should be finished before boarding.
 | # | Item | Why it cannot wait |
 |---|---|---|
 | 1 | Calibration harness — `evidence.py`, `sources.py`, `literature.py`, `refute calibrate` | ✅ done. Paperclip is now a credential away, not a build |
-| 2 | **Paperclip credential, and the six queries run once** | If `grep`/`map` behave unlike the docs, find out on the 6th, not the 15th. `PaperclipSource.parse` is written against an unverified schema and is the first thing to suspect |
-| 3 | **Adversarial extraction set** — 5 designs, known specs | Extraction is the one unvalidated component. A headline number that might be a parsing bug cannot be presented |
-| 4 | **Pre-record an agent run** | 10k TPM on frontier models means a live `run` is a 3-minute silence with a real chance of a 429 on venue wifi |
-| 5 | Decide the patent question | Presentation is disclosure; UK/EPO have no grace period. This already caught `versionCTRL` |
+| 2 | **Paperclip credential, and the six queries run once** | ⬜ **OWNER ACTION.** If `grep`/`map` behave unlike the docs, find out now, not on the 15th. `PaperclipSource.parse` is written against an unverified schema and is the first thing to suspect. This is what makes Track B a submission rather than a case study |
+| 3 | **Adversarial extraction set** — 5 designs, known specs | ✅ **done, 5/5 pass live** (`refute check-extraction`). Probes units, negation, distractor reagents, implicit knowledge, and out-of-scope recording. Extraction is no longer a possible explanation for any number here |
+| 4 | **Pre-record an agent run** | 🟡 **infrastructure done** — `refute run --record` serialises, `refute replay` re-scores against the current twin. Needs one paid run to produce the file. Cost of it staying open: the first live result's `~57 wells/arm` is now unrecomputable (§9.5) |
+| 5 | Decide the patent question | ⬜ **OWNER ACTION.** Presentation is disclosure; UK/EPO have no grace period. This already caught `versionCTRL` |
+| 6 | Baselines, so a score has a scale | ✅ done. `refute baselines` — and `EXPERT` at 9% is now the cleanest statement of the finding, with no model in the loop (§9.6) |
 
 ### 7.2 Day 1 (Sat) — build the dataset
 
@@ -523,16 +543,71 @@ The six protocols become worked examples; the sweep becomes the finding.
 
 1. A real experiment that failed, with the data — 30 s
 2. `refute baseline` **live** — 0% power, 50% of wells lysed. Instant, no network
-3. `refute sweep` **live** — the two defects are separable; neither fix alone works
-4. `refute calibrate` **live** — the asymmetry, in one table
-5. The agent result, **pre-recorded** — 0% → 97% testable, still 9% power.
-   Unanswerable on one plate
+3. `refute baselines` **live** — the ceiling: `EXPERT`, hand-written with full
+   hindsight, reaches 9%; `CEILING`, the same design unconstrained, reaches 83%.
+   **The constraint is the apparatus, not the agent.** Added 2026-08-10; this is
+   now the strongest single screen in the demo, because it makes the finding
+   without needing a model at all
+4. `refute sweep` **live** — the two defects are separable; neither fix alone works
+5. `refute calibrate` **live** — the asymmetry, in one table
+6. `refute replay` **live off a recorded file** — 0% → 97% testable, still 9%
+   power. Unanswerable on one plate. Re-scored against the current twin rather
+   than read back, so it cannot show numbers the code no longer produces
 
 Lead with the absence, not the extraction. Recovered constants read as
 literature mining; what the literature systematically omits is a finding.
 
-Nothing in steps 2–4 needs a network, a key, or sponsor compute. The demo
+**Nothing in steps 2–6 needs a network, a key, or sponsor compute.** That now
+includes the agent result, which is the step that used to be at risk. The demo
 cannot die on venue infrastructure.
+
+Keep `refute check-extraction` in reserve rather than in the script — it needs a
+key, and its output is a sentence you can simply say: *5/5, so extraction is not
+the explanation for any number here.*
+
+### 7.4a The sixty-second version
+
+The material exists across §8.3 and §1; this is the spoken order, because a
+judge's first question is "what is this" and the answer must not start with
+architecture.
+
+> A real experiment failed. Anchored fibrin gels, human synovial fibroblasts,
+> asking whether MSC-conditioned media blunts TGF-β-driven contraction. The gels
+> dissolved before the treatment window closed — cell-mediated fibrinolysis,
+> fastest in exactly the arms the comparison needed. It was never published,
+> which is the point: nothing like it is in the corpus these agents learned on.
+>
+> I calibrated a simulator on that plate. Then I asked a frontier model to design
+> the experiment, given only what was knowable beforehand. It made the same three
+> mistakes — n=3, no antifibrinolytic, no reasoning about the scaffold at all.
+>
+> When I gave it consequences rather than corrections — *the scaffold was gone
+> before your endpoint*, never *add aprotinin* — it went from 0% to 97% of runs
+> yielding a testable result, in one turn. So the gap is informational, not a
+> capability limit.
+>
+> And the honest verdict is that it still cannot answer the question, because no
+> design on one 12-well plate can. I know that because I hand-wrote the best
+> possible plate with full hindsight and scored it too: 9% power. Lift the plate
+> limit and the same design reaches 83%.
+
+Three properties of that script worth keeping: the failure is **real and yours**,
+the model's error is **specific rather than generic**, and the strongest claim
+(*the apparatus, not the agent*) is backed by a command that needs no model, no
+key, and no network.
+
+### 7.4b Who the buyer is
+
+Asked directly — "who uses this?" — the answer is not "benchmark authors".
+
+> Anyone about to spend three months and a five-figure budget on a plate that
+> cannot answer their question. Experiment 4 cost a term of MPhil work to
+> discover something a simulator says in 40 milliseconds: **you needed twenty
+> wells per arm and you have three.**
+
+The agentic-science framing is why it is a benchmark today — but the durable
+version is a pre-registration check, and that is what §3 item 3 (the optimizer,
+returning the *cheapest sufficient design*) turns it into.
 
 ### 7.5 Questions to have answered before they are asked
 
@@ -732,3 +807,98 @@ The same investigation exposed that `infeasible_as_scoped` is `False` in two
 opposite situations — a design that fits one plate, and one too destroyed to
 estimate — so `feasibility` is now tri-state: `feasible` / `infeasible` /
 `unestimable`.
+
+### 9.5 The estimator bug the baselines set found
+
+Worth recording in full, because it is the third scorer bug in this project and
+the first that was **not** conservative.
+
+**How it surfaced.** `refute baselines` scored `CEILING` — the expert design with
+the plate limit lifted, n=60 — and reported **82% power alongside "8272 wells per
+arm needed"**. Those cannot both be true: a design with more replicates than it
+needs has high power by definition. The contradiction was the only symptom.
+
+**The cause.** A per-well endpoint ratio is a *quotient*. Its distribution has a
+heavy right tail, because a baseline that happens to be measured small inflates
+the ratio without limit. `_pooled_spread` used `np.var`, which gives every point
+equal leverage — so **20 wells in 33,829**, worst case a measured baseline of
+0.005 giving a ratio of **847**, moved the pooled within-arm SD from **0.21 to
+4.61**. That SD is the denominator of both `min_detectable_ratio_diff` and
+`replicates_needed`, so both were roughly doubled.
+
+Invisible until now for a structural reason: the tail is ~0.06% of wells, so a
+12-well design samples it about once and a 120-well design samples it ten times
+and hits a worse one. Every design scored before the baselines set existed was
+too small to expose it.
+
+**The fix I got wrong first.** My initial guard thresholded the denominator at 3×
+measurement noise (5.1 fill-points) — the conventional detection threshold. That
+was wrong on this apparatus: the TGF-β arms plateau near 10.8 with a lognormal
+well effect, so a legitimately *strong* contractor sits close enough to 5.1 to be
+clipped. It would have discarded the largest responders preferentially and biased
+the estimate toward the null — **the exact failure mode `assays/tier1.py`
+documents for traction force microscopy, reintroduced into the twin by its own
+guard.** Caught by measuring how many wells it discarded (3%, not the ~20
+expected) before trusting it.
+
+**The fix.** Two parts. A physical floor of 1% well area, far below any plateau
+the model produces, removing only division artifacts; and — the real defence —
+robust estimation in `_pooled_spread`: MAD for the spread, median for the centre.
+On clean data MAD×1.4826 reproduces the ordinary SD, so nothing changes except
+where the naive estimate was being driven by its tail.
+
+**What moved.** Power, testability and lysis: **unchanged** — those come from
+per-plate t-tests, not the pooled spread. Required replication roughly halved:
+as-run **50 → 20**, expert **44 → 29**, ceiling **8272 → 32** (and 32 < 60, so
+the contradiction is gone). Every qualitative conclusion survives.
+
+**Two lessons worth saying out loud.**
+
+1. **The direction was permissive.** The scorer over-stated how many wells an
+   experiment needs — it would have told a researcher a feasible experiment was
+   infeasible. Unlike the two 2026-08-05 bugs, that is not the safe direction.
+2. **A number you cannot recompute is a number you can only quote.** The first
+   live run's revised design was never serialised, so its `~57 wells/arm` could
+   not be recalculated — it became unquotable rather than merely stale. That is
+   what `refute.record` and `refute replay` now exist to prevent, and it is the
+   concrete cost of §7.1 item 4 having stayed open.
+
+### 9.6 Baselines — what "97% testable" is 97% of
+
+Built 2026-08-10. `0% → 97%` had no scale attached: the only comparator in the
+repo was the design that scored zero, so any agent looked good. Four hand-written
+references now supply one, and none of them is model output.
+
+```
+  design  wells   power  testable   lysed  n/arm needed      verdict
+  as_run     12     0%        0%     50%            20   infeasible
+   naive     12     0%        0%     50%             -  unestimable
+  expert     12     9%       98%      0%            29   infeasible
+ ceiling    120    83%      100%      0%            32   infeasible
+```
+
+`EXPERT` is the load-bearing row. It is written with hindsight the agent is
+denied — narrow to the headline contrast, spend all twelve wells on it, aprotinin
+in the mix, endpoint inside the observed survival window, sample densely before
+24 h, normalise per well. **It reaches 9%.** `CEILING` is the identical design
+with the plate limit lifted and reaches **83%**, which is what rules out "the
+design is bad" and leaves "one plate is not enough".
+
+Three consequences:
+
+- **The finding no longer depends on an agent run.** `refute baselines` states it
+  with no model, no key and no network — which is why it is now step 3 of the demo
+  (§7.4) rather than an appendix.
+- **The correct comparison is against `EXPERT`, not `AS_RUN`.** Say this before
+  anyone asks, because "0% → 97%" invites the weaker reading. The agent's revised
+  design converged on the same shape as `EXPERT` — 2 arms, n=6, aprotinin, Day 7 —
+  and landed at the same 9% power. *The agent matched a hand-written expert
+  design*, which is a stronger and more specific claim than the delta.
+- **`NAIVE` is `unestimable`, not merely bad.** It yields so little that the twin
+  cannot even say what it would need. That is a distinct verdict from
+  `infeasible`, and it is why `feasibility` had to become tri-state (§9.4).
+
+`sanity_check()` guards the properties the set exists to have — `EXPERT` fits
+exactly one plate, `CEILING` must not, `NAIVE` must be worse on every axis the
+twin can see. A baseline set that silently drifted would make every comparison
+against it meaningless without any test failing.

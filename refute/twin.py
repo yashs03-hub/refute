@@ -67,6 +67,23 @@ TREATMENT_TAU_H = 24.0
 # contains part of the effect it is meant to normalise away.
 BASELINE_NOISE_FRACTION = 0.2
 
+# PHYSICAL FLOOR - the smallest measured fill that can serve as the denominator
+# of a per-well ratio: 1% of the well area. Below this there is no coherent
+# construct to quantify, and a bench scientist excludes the well on sight.
+#
+# Deliberately NOT a multiple of the measurement noise, which was the first
+# attempt and was wrong. 3x noise is 5.1 fill-points, and the TGF-b arms plateau
+# near 10.8 with a lognormal well effect - so a legitimately strong contractor
+# sits close enough to 5.1 that thresholding there discards real wells. It would
+# preferentially discard the STRONGEST responders and bias the estimate toward
+# the null: exactly the failure mode `assays/tier1.py` describes for traction
+# force microscopy, introduced into the twin by its own guard.
+#
+# 1% is far below any plateau the model produces, so it removes only the
+# division artifacts (a measured baseline of 0.005 giving a ratio of 847) and
+# nothing biological. It is not the main defence - see `_pooled_spread`.
+MIN_MEASURABLE_FILL_PCT = 1.0
+
 
 def baseline_tolerance_h(params: TwinParams = DEFAULT_PARAMS) -> float:
     """Grace period after t0 during which an image is still a valid baseline."""
@@ -92,12 +109,23 @@ class WellResult:
         return self.excluded_reason is None
 
     def endpoint_ratio(self, endpoint_h: float, baseline_h: float) -> float | None:
-        """Endpoint fill normalised to this well's own pre-treatment fill."""
+        """Endpoint fill normalised to this well's own pre-treatment fill.
+
+        Returns None when the baseline is too small to divide by. `base > 0` is
+        not a sufficient guard: a baseline within noise of zero is not a
+        measurement, and dividing by it manufactures a ratio in the hundreds from
+        a well where there was effectively no gel to measure. Twenty such wells
+        in 33,829 moved the pooled within-arm SD from 0.21 to 4.61, which then
+        propagated into `min_detectable_ratio_diff` and `replicates_needed`.
+
+        In the real assay such a well is excluded at the bench for exactly this
+        reason - there is nothing there to quantify.
+        """
         if not self.evaluable:
             return None
         end = self.fill_by_time.get(endpoint_h)
         base = self.fill_by_time.get(baseline_h)
-        if end is None or base is None or base <= 0:
+        if end is None or base is None or base < MIN_MEASURABLE_FILL_PCT:
             return None
         return end / base
 

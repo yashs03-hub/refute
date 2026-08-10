@@ -71,31 +71,76 @@ one still fails:
 1. **The scaffold dissolved.** No antifibrinolytic, and fibrinolysis runs
    fastest in the most contractile arm — so the TGF-β arms failed first, which
    are exactly the arms the comparison needed.
-2. **It was ~17× underpowered anyway.** At ±2–3 fill-points of quantification
-   noise, resolving the effect needs ~50 wells per arm. The experiment ran 3.
+2. **It was ~7× underpowered anyway.** At ±2–3 fill-points of quantification
+   noise, resolving the effect needs ~20 wells per arm. The experiment ran 3.
    *Measurement precision, not biology, is the binding constraint* — and this
    holds even if every gel survives.
 
 The second finding was not designed in. The twin produced it, and it
 contradicted the test expectation originally written for it.
 
+> **Number corrected 2026-08-10.** This read *~50 wells per arm, ~17×* until a
+> non-robust variance estimator was found in `_pooled_spread`: a per-well ratio
+> has a heavy right tail, and `np.var` let single division artifacts inflate the
+> assay's precision floor. Both are now estimated robustly. Power, testability
+> and lysis were unaffected — only the required-replication estimate, which was
+> roughly doubled. The conclusion is unchanged and the direction of the error was
+> conservative.
+
+### Is it just this agent, or the apparatus?
+
+`refute baselines` scores four hand-written references so an agent's number has
+a scale:
+
+| design | power | testable | wells/arm needed |
+|---|---|---|---|
+| as-run | 0% | 0% | 20 |
+| naive | 0% | 0% | — |
+| **expert** — best plate available, full hindsight | **9%** | 98% | **29** |
+| ceiling — same design, plate limit lifted | 83% | 100% | 32 |
+
+`expert` is written knowing everything Experiment 4 taught: narrow to the
+headline contrast, spend all 12 wells on it, aprotinin in the mix, endpoint
+inside the survival window, dense early sampling. **It still reaches only 9%.**
+`ceiling` shows the same design does reach power once the plate limit is lifted —
+so the binding constraint is the apparatus, not the design.
+
+Compare an agent against `expert`, not against the as-run design. Beating a
+design that scored zero is not evidence of anything.
+
 ## Usage
 
 ```bash
 pip install -e ".[dev]"
-pytest                              # 12 calibration tests — the twin's contract
+pytest                              # the twin's contract
 
 python -m refute.cli baseline       # score Experiment 4 as it was actually run
+python -m refute.cli baselines      # the four references — as-run/naive/expert/ceiling
 python -m refute.cli sweep          # antifibrinolytic × replicates grid
+python -m refute.cli assays         # the registry: 1 calibrated, 6 scaffolds
+python -m refute.cli calibrate      # what literature calibration recovered
+python -m refute.cli replay RUN     # re-score a recorded agent run
 ```
 
-Both need no API key — the twin, the sweep and the tests call no model.
+**None of these needs an API key.** The twin, the baselines, the sweep, replay
+and the tests call no model — which is deliberate, so a result is never one
+rate-limit away from not existing.
 
 ```bash
 pip install -e ".[agent]"
-export ANTHROPIC_API_KEY=...
-python -m refute.cli run            # propose → simulate → revise, with the delta
+export OPENAI_API_KEY=...
+python -m refute.cli run --record cases/exp4/runs/gpt-5.5.json
+python -m refute.cli check-extraction    # 5 designs with known specs
 ```
+
+`--record` serialises the agent's prose and the extracted specs — but **not the
+scores**, which are recomputed on replay. A recorded run therefore stays honest
+across a calibration change instead of preserving numbers the code no longer
+produces. That property was added the hard way: see the correction note above.
+
+`check-extraction` validates the one component sitting upstream of every score.
+It currently passes 5/5, so extraction is not the explanation for any number
+here.
 
 ### Scoring your own agent
 
@@ -194,11 +239,15 @@ refute/
   twin.py          the simulator: contraction, lysis, attrition, measurement
   design.py        DesignSpec — the contract between extractor and twin
   score.py         power, testability, minimum detectable effect, diagnosis
+  baselines.py     as-run / naive / expert / ceiling — the scale for a score
   agent.py         Agent protocol, propose / revise / extract  (the only file
                    that calls a model)
   environment.py   reset / step — the benchmark as an environment for any agent
   api.py           HTTP: /score (free) · /score/text · /run (opt-in) · /assays
-  cli.py           baseline · sweep · run
+  record.py        serialise a run; replay re-scores against the current twin
+  extraction_cases.py  5 adversarial designs with known specs
+  cli.py           baseline · baselines · sweep · assays · calibrate ·
+                   check-extraction · replay · providers · run
 cases/exp4/        observed data + provenance
 tests/             the calibration contract
 ```

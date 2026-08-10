@@ -32,8 +32,40 @@ HEADLINE_CONTRAST = ("N-T", "N-CM+T")
 Z_80_POWER = 2.8               # z(1-a/2) + z(power) for a=0.05, power=0.80
 
 
+# A per-well endpoint ratio is a quotient, so its distribution has a heavy right
+# tail: a baseline that happens to be measured small inflates the ratio without
+# limit. `np.var` gives every point equal leverage, so one such well in tens of
+# thousands dominates the estimate - measured at 0.21 robust versus 4.61 naive on
+# a 120-well design, which then propagated straight into
+# `min_detectable_ratio_diff` and `replicates_needed`.
+#
+# The scale factor makes MAD a consistent estimator of SD for Gaussian data, so
+# on well-behaved arms this returns what `np.var` returned and nothing changes.
+# It only differs where the naive estimate was being driven by its tail.
+MAD_TO_SD = 1.4826
+
+
+def _robust_sd(values: list[float]) -> float:
+    """SD estimated via median absolute deviation.
+
+    Falls back to the ordinary SD if the MAD is zero, which happens only for
+    degenerate arms (every well identical) where there is no tail to guard
+    against anyway.
+    """
+    arr = np.asarray(values, dtype=float)
+    mad = float(np.median(np.abs(arr - np.median(arr))))
+    if mad == 0.0:
+        return float(np.std(arr, ddof=1))
+    return MAD_TO_SD * mad
+
+
 def _pooled_spread(plates: list[PlateResult]) -> tuple[float, float]:
-    """(within-arm SD of endpoint ratios, |gap between the contrasted arms|)."""
+    """(within-arm SD of endpoint ratios, |gap between the contrasted arms|).
+
+    Both estimators are robust: the spread via MAD, the centre via the median.
+    A single division artifact must not be able to move either, or the assay's
+    precision floor becomes a statement about one anomalous well.
+    """
     a, b = HEADLINE_CONTRAST
     xs: list[float] = []
     ys: list[float] = []
@@ -43,8 +75,8 @@ def _pooled_spread(plates: list[PlateResult]) -> tuple[float, float]:
         ys += ratios.get(b, [])
     if len(xs) < 2 or len(ys) < 2:
         return float("nan"), 0.0
-    sd = float(np.sqrt((np.var(xs, ddof=1) + np.var(ys, ddof=1)) / 2.0))
-    return sd, float(abs(np.mean(ys) - np.mean(xs)))
+    sd = float(np.sqrt((_robust_sd(xs) ** 2 + _robust_sd(ys) ** 2) / 2.0))
+    return sd, float(abs(np.median(ys) - np.median(xs)))
 
 
 @dataclass
