@@ -328,7 +328,8 @@ working artefact that motivates it and gives the dataset a use.
 | **"Why not just build this in BenchFlow?"** — asked by a BenchFlow judge | Agree, and say so first: it probably *should* live there. The harness was never the hard part; a reward signal that is not another model's opinion was. `refute` contributes the scorer, BenchFlow contributes the distribution |
 | Track B entry is judged as a literature-mining exercise | Lead with the absence, not the extraction. The dataset's value is which constants are *missing* and the pattern in which ones — a claim about publishing practice that no single paper can support |
 | Judged as sitting out the safety conversation the week AI-designed phages hit the news | §8. The architecture already takes a position — generator never verifies itself, fails closed, silence is not evidence — and took it before the news. Reframe, do not pivot; the reasons not to pivot are recorded so they are not re-argued on the day |
-| Public presentation is a patent disclosure | UK/EPO have no grace period — the same trap already hit `versionCTRL`. Make it a conscious decision before the 15th, not a discovery after |
+| ~~Public presentation is a patent disclosure~~ | ✅ **RETIRED 2026-08-10 — no patent.** Decided deliberately, not defaulted into. The method can be presented, written up and open-sourced without restriction |
+| Conflating "no patent" with "the data can go public" | Two different questions, and only one is settled. The repo stays **PRIVATE** because `cases/exp4/data/` is unpublished research data on consented waste tissue: that is governed by the ethics approval and by publication priority, neither of which a patent decision touches. Note the *derived* values leak too — `calibration.py` carries the measured fill percentages and the 6/6 vs 0/4 lysis split, and `score.py`'s diagnosis strings quote them. Publishing the code publishes the result |
 
 ---
 
@@ -507,7 +508,7 @@ needing none of those should be finished before boarding.
 | 2 | **Paperclip credential, and the six queries run once** | ⬜ **OWNER ACTION.** If `grep`/`map` behave unlike the docs, find out now, not on the 15th. `PaperclipSource.parse` is written against an unverified schema and is the first thing to suspect. This is what makes Track B a submission rather than a case study |
 | 3 | **Adversarial extraction set** — 5 designs, known specs | ✅ **done, 5/5 pass live** (`refute check-extraction`). Probes units, negation, distractor reagents, implicit knowledge, and out-of-scope recording. Extraction is no longer a possible explanation for any number here |
 | 4 | **Pre-record an agent run** | ✅ **done** — `cases/exp4/runs/gpt-5.5-high.json`, committed and replayable with no network. Took three attempts and broke four things; see §10. The recording is now a test fixture |
-| 5 | Decide the patent question | ⬜ **OWNER ACTION.** Presentation is disclosure; UK/EPO have no grace period. This already caught `versionCTRL` |
+| 5 | Decide the patent question | ✅ **DECIDED 2026-08-10: no patent.** Nothing to protect, so presenting, publishing and open-sourcing the method are all unconstrained. Do not re-open this on the day. ⚠️ This resolves *patents only* — see §5 on the data, which is a separate question |
 | 6 | Baselines, so a score has a scale | ✅ done. `refute baselines` — and `EXPERT` at 9% is now the cleanest statement of the finding, with no model in the loop (§9.6) |
 
 ### 7.2 Day 1 (Sat) — build the dataset
