@@ -127,6 +127,39 @@ extractor call, and extraction failures are reported as
 `info["error"] == "extraction_failed"` rather than scored as a bad design — a
 provider outage must not look like an agent designing badly.
 
+### Over HTTP
+
+```bash
+pip install -e ".[api]"
+uvicorn refute.api:app
+```
+
+| Endpoint | Cost | Needs a key |
+|---|---|---|
+| `POST /score` | a simulation | no |
+| `POST /score/text` | one extractor call | yes |
+| `POST /run` | the full loop | yes, and **opt-in** |
+| `GET /assays` | nothing | no |
+
+```bash
+curl -X POST localhost:8000/score -H 'Content-Type: application/json' \
+  -d '{"design": {...}, "n_sims": 400}'
+```
+
+`/score` is pure simulation, so it can be exposed publicly with no credential
+anywhere near the process — which also means the scoring path stays up when a
+provider is down, rate-limited, or unaffordable.
+
+`/run` spends the server's own API budget per request, so it returns **403
+unless `REFUTE_ENABLE_RUN=1`**. Installing this must not hand anyone an open
+endpoint that bills your account.
+
+`/score/text` returns what the extractor read alongside the score, because a
+low score from a misread design is a parsing failure and has to be
+distinguishable from a design that genuinely does not work. Missing credentials
+are `503` (the server is not configured), upstream provider failures are `502`
+(the failure is not yours) — a 500 would tell a caller nothing actionable.
+
 ## Honest limits
 
 State these alongside any result.
@@ -156,6 +189,7 @@ refute/
   score.py         power, testability, minimum detectable effect, diagnosis
   agent.py         propose / revise / extract  (the only file that calls a model)
   environment.py   reset / step — the benchmark as an environment for any agent
+  api.py           HTTP: /score (free) · /score/text · /run (opt-in) · /assays
   cli.py           baseline · sweep · run
 cases/exp4/        observed data + provenance
 tests/             the calibration contract

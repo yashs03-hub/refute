@@ -18,7 +18,10 @@ dependencies = [
 # Only needed for `refute run`. The twin, the sweep and the tests do not
 # call any model.
 agent = ["anthropic>=0.40"]
-dev = ["pytest>=8.0"]
+# The HTTP surface. `/score` still calls no model - the server needs a
+# credential only for the endpoints that extract prose or drive an agent.
+api = ["fastapi>=0.110", "uvicorn>=0.22"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [project.scripts]
 refute = "refute.cli:main"
