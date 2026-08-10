@@ -261,6 +261,12 @@ working artefact that motivates it and gives the dataset a use.
    a domain-expert design, so the agent's number means something relative.
 7. **Propagate calibration uncertainty.** Score over a distribution of
    `TwinParams` rather than the point estimate. Report bands, not numbers.
+   ✅ *Started 2026-08-10* — `score_design` now re-scores at the edges of every
+   ASSUMED constant a design actually reaches and sets
+   `verdict_sensitive_to_assumption` when the conclusion does not survive the
+   span (§9.2). That covers the one constant a design can reach directly,
+   `aprotinin_hazard_scale`. The general case — bands over *all* of `TwinParams`,
+   including the FITTED lysis shape and scale — is still open.
 8. **Second case (qPCR artifact)** — the "hypoxic shift" that turned out to be
    empty tubes. Same shape: an agent handed that data will confidently explain
    an artifact. **Needs the owner's explicit go-ahead before touching that
@@ -423,6 +429,48 @@ than a shortfall. The prediction, recorded in advance so it can be wrong:
 If that prediction holds, the calibration run *is* a result about the
 literature, not merely a step towards a second case.
 
+### 6.6 How this scales — tier cases by defect, not by domain
+
+Added 2026-08-10, answering the strongest objection to the whole project:
+*hand-crafting a mechanistic twin per case does not scale.* Correct as stated.
+The response is not to build twins faster but to notice that **most cases do not
+need one**, and to say which do.
+
+§6's own finding is why. *What the assay measures: 2/9 recovered · how the assay
+breaks: 0/10.* Zero. Every mechanistic twin needs somebody's unpublished plate,
+because the literature does not record how assays fail. That is not a
+scaling obstacle to engineer around — it is the finding, and it is the argument
+for a contribution format rather than a scraper.
+
+| Tier | Encodes | Needs a mechanistic twin? | Calibration cost |
+|---|---|---|---|
+| **0** | Underpowering, or infeasibility at the available scale | **No** — arithmetic. Within-arm variance, `Z_80_POWER`, `PLATE_WELLS` | A published effect size and a variance estimate |
+| **1** | One dominant failure mechanism coupled to the phenotype | Yes, but a small one: one hazard model plus one readout curve | Someone's raw data. This is what `fibrin_contracture` cost |
+| **2** | Interacting failure modes | Yes, and genuinely hard | Not reachable yet |
+
+Three consequences worth acting on:
+
+- **Tier 0 is where volume comes from.** `score.py` already runs a tier-0-only
+  path — the `infeasible_as_scoped` branch needs no mechanism at all, and it
+  produced the headline verdict (*no design on one plate can answer the
+  question*). A tier-0 case is a power model and a citation.
+- **The six SCAFFOLDs are tier-1 *candidates*, and the registry already says so.**
+  `runnable()` / `scaffolds()` splits on exactly this line, and
+  `require_runnable()` is the gate. Six data points for the tiering argument, not
+  zero.
+- **`out_of_twin_scope` is the tier-2 backlog.** Every design refused for
+  proposing something unmodelled is a recorded instance of a mechanism no current
+  twin covers. The refusals accumulate into the list of what to build next —
+  which makes the fail-closed guard a *source* of dataset signal rather than only
+  a safety valve.
+
+**The claim to make, and its limit.** Tiering makes the corpus reachable without
+pretending calibration is cheap: many tier-0 cases, few tier-1 anchors, tier 2
+honestly empty. What it does *not* do is make a second mechanistic twin cheaper.
+It says that most of a useful benchmark does not need one — and that where a
+twin genuinely is required, the honest answer is that somebody has to contribute
+data that was never published.
+
 ---
 
 ## 7. Run sheet — 15–16 Aug 2026
@@ -495,6 +543,9 @@ cannot die on venue infrastructure.
 | "Why not use Proto?" | Its primitives are sequence-typed (§2). The analogy is worth stating; the dependency is not worth having |
 | "One plate is not a benchmark." | Correct, and stated first. The alternative on offer is zero plates. Every literature-built benchmark is trained on survivors; this is calibrated on an experiment that was never published |
 | "AI just designed working viruses — why aren't you working on *that*?" | §8 |
+| "Won't the agent just overfit to your equations?" | §9.1. Partly, and the scorer now says when a verdict rests on an ASSUMED constant instead of reporting the midpoint. Half the score — power — is arithmetic no agent games by finding a generous mechanism |
+| "What if a design is cleverer than your twin?" | §9.2. It refuses to score rather than scoring it wrong; that was a real bug, and it failed permissively. The refusals become the list of mechanisms worth modelling next |
+| "One hand-built twin per case doesn't scale." | §6.6. Conceded. Tier 0 needs no mechanism and is where volume comes from; a tier-1 anchor needs somebody's unpublished plate, which is the finding, not the obstacle |
 
 ---
 
@@ -580,3 +631,104 @@ which is why the tests missed it and why it was safe to ship. Name the
 asymmetry rather than hiding the bugs; it is the more credible position.
 
 **Scope: nothing in §8 changes code.** Track B, §6 and §7 are unaffected.
+
+---
+
+## 9. Hardening the scorer — answers to three critiques
+
+Built 2026-08-10 in response to three objections raised against the design, all
+of which landed. Recorded here because two of them are the sort of thing a judge
+will ask, and the answer is better as a property of the code than as a rebuttal.
+
+### 9.1 Goodhart — the twin's equations become the target
+
+**The objection.** An agent iterating against feedback optimises the equations in
+`twin.py`, not biology. It will learn to throw aprotinin at the problem.
+
+**The sharp form, which is worse.** `DesignSpec.antifibrinolytic` is a **`bool`**,
+and flipping it multiplies the Weibull scale by `aprotinin_hazard_scale` — a
+constant `calibration.py` tags **ASSUMED, not measured**. One bit, uncalibrated
+effect size, unlocks the entire failure mode the case is built around. That is a
+cheat code in the input schema.
+
+**Two things that already limited it.** The brief is pre-registration only and
+never says "fibrinolysis"; feedback reports consequences, never corrections. And
+half the score — power — is arithmetic no agent games by finding a generous
+corner of a mechanism. The headline finding came entirely from that half.
+
+**What changed.** `score_design` now re-scores at both ends of every ASSUMED
+constant a design actually reaches, and sets
+`verdict_sensitive_to_assumption` when the categorical verdict does not survive
+the span. The point estimate is still reported; it is reported with a warning
+above it. Costs nothing for designs that never touch an assumed constant, which
+is most of them.
+
+**The limit, stated.** This covers `aprotinin_hazard_scale`, the only ASSUMED
+constant a design reaches directly. The FITTED lysis shape and scale are not
+swept — §3 item 7 remains open. And Goodhart applies in full the moment the
+optimizer in §3 item 3 lands: a benchmark is not an environment, but a search
+over designs is.
+
+### 9.2 Out-of-distribution designs — the permissive failure
+
+**The objection.** A clever design that sidesteps lysis by changing the matrix
+will be misscored, because the physics are not in `twin.py`.
+
+**Right, and the behaviour was worse than misscoring.** `DesignSpec` had no field
+for a matrix change, and the extractor is correctly instructed not to improve a
+design — so the feature was silently **dropped**, and the twin returned a
+confident number for a plate nobody proposed. Unlike both 2026-08-05 bugs, that
+fails in the **permissive** direction, the one §8.5 names as dangerous. It was a
+correctness bug, not a known limit.
+
+**What changed.** `out_of_twin_scope: list[str]` on `DesignSpec`, the extractor
+instructed to populate it, and `OutOfTwinScopeError` raised rather than a score
+returned. The message says *this is a limit of the twin, not a defect in the
+design*, because the wording is what stops the refusal teaching the wrong lesson.
+Wired through every surface: the library raises, `RefuteEnv` ends the episode
+unscored (an RL loop cannot take an exception mid-episode), the API returns a
+`422` carrying `error: "out_of_twin_scope"` to distinguish it from a schema
+`422`, and the CLI exits `2` printing no score at all.
+
+**The dividend.** Refusals accumulate into a record of mechanisms no twin covers
+— the tier-2 backlog in §6.6. The guard is a source of dataset signal, not only a
+safety valve.
+
+### 9.3 Scaling the twins
+
+Answered in **§6.6**: tier cases by the defect they encode. Tier 0 needs no
+mechanism and is where volume comes from; tier 1 needs somebody's unpublished
+plate; tier 2 is honestly empty. The objection is conceded rather than argued —
+a second mechanistic twin is not cheaper, most of a useful benchmark just does
+not need one.
+
+### 9.4 The interface question — agent, API, or both
+
+All three, now built, and the ordering was deliberate: the layer that needs no
+new infrastructure first.
+
+| Surface | What it is | Keys on server |
+|---|---|---|
+| `RefuteEnv` | `reset`/`step`; `DesignSpec` is the action, `power` the reward | none — a `DesignSpec` action calls no model |
+| `Agent` Protocol | two methods, `propose`/`revise`; `ChatModelAgent` is the reference | n/a |
+| `POST /score` | pure simulation over HTTP | none |
+| `POST /score/text` | extract prose, then score | extractor only |
+| `POST /run` | the full loop | **yes — 403 unless `REFUTE_ENABLE_RUN=1`** |
+
+Two decisions worth defending out loud:
+
+- **The reward is `power` alone, not a composite.** A composite would bury a
+  scientific judgement — how much a lost baseline is worth against a dissolved
+  scaffold — inside a constant nothing in Experiment 4 constrains. The full score
+  is in `info["design_score"]`; a different objective is the caller's to build.
+- **`ChatModelAgent` is deliberately thin.** A richer scaffold would raise scores
+  and make the result a measurement of the scaffold rather than of the model —
+  the same confound the extractor is held constant to avoid.
+
+**One bug found at the wire boundary.** `DesignScore` reports "not estimable" as
+`float("nan")` and `-1`. `NaN` is not valid JSON, and a client not knowing the
+convention would read `-1` as a real well count. Both now serialise as `null`.
+The same investigation exposed that `infeasible_as_scoped` is `False` in two
+opposite situations — a design that fits one plate, and one too destroyed to
+estimate — so `feasibility` is now tri-state: `feasible` / `infeasible` /
+`unestimable`.

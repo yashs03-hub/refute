@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 from .calibration import DEFAULT_PARAMS, TwinParams
-from .design import DesignSpec
+from .design import DesignSpec, OutOfTwinScopeError
 from .score import DesignScore, feedback_for_agent, score_design
 
 # The brief lives in `agent.py` next to the model calls it is sent with, but it
@@ -146,9 +146,28 @@ class RefuteEnv:
                 },
             )
 
-        score = score_design(
-            spec, params=self.params, n_sims=self.n_sims, seed=self.seed
-        )
+        try:
+            score = score_design(
+                spec, params=self.params, n_sims=self.n_sims, seed=self.seed
+            )
+        except OutOfTwinScopeError as exc:
+            # The library raises, which is right for a caller expecting a
+            # number. An episode must not die on it: the design may be fine and
+            # the twin simply cannot speak to it, so this ends the episode as
+            # unscored rather than propagating out of `step`.
+            self.done = True
+            return self._result(
+                observation=None,
+                reward=0.0,
+                info={
+                    "round": self.round,
+                    "scored": False,
+                    "error": "out_of_twin_scope",
+                    "out_of_scope": list(exc.reasons),
+                    "detail": str(exc),
+                },
+            )
+
         self.done = self.round >= self.max_rounds or score.power >= self.target_power
 
         info: dict[str, Any] = {
@@ -162,6 +181,7 @@ class RefuteEnv:
             "infeasible_as_scoped": score.infeasible_as_scoped,
             "over_plate_capacity": score.over_plate_capacity,
             "diagnoses": list(score.diagnoses),
+            "verdict_sensitive_to_assumption": score.verdict_sensitive_to_assumption,
             "terminated_reason": self._reason(score),
         }
         self.history.append(info)

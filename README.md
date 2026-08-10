@@ -171,11 +171,18 @@ State these alongside any result.
   qualitative Day 7. Enough to fit a hazard with a contractility term; not
   enough to pin its shape.
 - **Aprotinin's benefit is assumed, not measured** — Experiment 4 had no such
-  arm. It's swept in the tests for exactly this reason; no conclusion here rests
-  on a single value of it.
-- The twin **can't reward a design that exploits a mechanism it doesn't model**.
-  A genuinely clever design can score badly for a reason that is the twin's
-  fault, not the design's.
+  arm. It's swept in the tests, and swept again at scoring time, for exactly this
+  reason; no conclusion here rests on a single value of it.
+- The twin **can't reward a design that exploits a mechanism it doesn't model** —
+  so it refuses to score one. A design that changes the matrix, the seeding
+  density or the readout raises `OutOfTwinScopeError` rather than receiving a
+  confident number about a different experiment. That refusal is a limit of the
+  twin, not a verdict on the design.
+- **A verdict resting on an assumed constant is flagged, not reported plainly.**
+  Aprotinin's benefit was never measured here, so a design using an
+  antifibrinolytic is re-scored at both ends of that constant's plausible range;
+  if the conclusion changes, `verdict_sensitive_to_assumption` is set and the
+  summary warns before showing any number.
 - The treatment effect is **injected**, not calibrated. Nothing here supports a
   claim about whether MSC-conditioned media actually suppresses contraction.
 
@@ -187,7 +194,8 @@ refute/
   twin.py          the simulator: contraction, lysis, attrition, measurement
   design.py        DesignSpec — the contract between extractor and twin
   score.py         power, testability, minimum detectable effect, diagnosis
-  agent.py         propose / revise / extract  (the only file that calls a model)
+  agent.py         Agent protocol, propose / revise / extract  (the only file
+                   that calls a model)
   environment.py   reset / step — the benchmark as an environment for any agent
   api.py           HTTP: /score (free) · /score/text · /run (opt-in) · /assays
   cli.py           baseline · sweep · run

@@ -12,13 +12,18 @@ per-well curve fit.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from scipy import stats
 
-from .calibration import DEFAULT_PARAMS, PLATE_WELLS, TwinParams
-from .design import DesignSpec
+from .calibration import (
+    APROTININ_HAZARD_SCALE_RANGE,
+    DEFAULT_PARAMS,
+    PLATE_WELLS,
+    TwinParams,
+)
+from .design import DesignSpec, OutOfTwinScopeError
 from .twin import ExperimentTwin, PlateResult, baseline_tolerance_h
 
 ALPHA = 0.05
@@ -59,9 +64,40 @@ class DesignScore:
     n_conditions: int = 0
     diagnoses: list[str] = field(default_factory=list)
 
+    # Whether this verdict survives the twin's own uncalibrated constants. Set
+    # only when the design reaches one - most designs never do, so most scores
+    # cost nothing extra and report False truthfully.
+    verdict_sensitive_to_assumption: bool = False
+    assumptions_in_play: list[str] = field(default_factory=list)
+    power_range_under_assumptions: tuple[float, float] | None = None
+
     @property
     def failed(self) -> bool:
         return self.power < 0.5
+
+    @property
+    def feasibility(self) -> str:
+        """Three distinct states that `infeasible_as_scoped` alone conflates.
+
+        That flag is False both for a design that fits one plate and for one so
+        destroyed that the requirement cannot be estimated at all - opposite
+        situations. Naming them separately matters for sensitivity: a design
+        whose data yield depends on an unmeasured constant is exactly the case
+        worth flagging.
+        """
+        if self.replicates_needed <= 0:
+            return "unestimable"
+        return "infeasible" if self.infeasible_as_scoped else "feasible"
+
+    @property
+    def verdict(self) -> tuple[bool, str]:
+        """The categorical claims this score makes.
+
+        Sensitivity is judged on these rather than on power itself: power moving
+        from 3% to 6% because of an assumed constant changes nothing anyone would
+        act on, whereas crossing from 'this cannot work' to 'this works' does.
+        """
+        return (self.failed, self.feasibility)
 
     @property
     def infeasible_as_scoped(self) -> bool:
@@ -81,6 +117,14 @@ class DesignScore:
                 "!! exceeds the calibrated apparatus - the numbers below assume "
                 "the assay scales beyond one plate, which is NOT calibrated "
                 "(no data on between-cast or between-plate batch effects)."
+            )
+        if self.verdict_sensitive_to_assumption:
+            lo, hi = self.power_range_under_assumptions or (float("nan"),) * 2
+            lines.append(
+                f"!! this verdict is NOT robust to the twin's assumptions - "
+                f"power spans {lo:.0%}-{hi:.0%} across the plausible range of "
+                f"{', '.join(self.assumptions_in_play)}. Read the single number "
+                f"below as one point inside that span, not as a result."
             )
         lines += [
             f"power to recover injected effect : {self.power:.0%}",
@@ -115,7 +159,22 @@ def score_design(
     params: TwinParams = DEFAULT_PARAMS,
     n_sims: int = 400,
     seed: int | None = 0,
+    check_assumptions: bool = True,
 ) -> DesignScore:
+    """Simulate a design and report what the twin can say about it.
+
+    Raises `OutOfTwinScopeError` if the design does something the twin does not
+    model. Returning a number there would be an error in the permissive
+    direction, which for a verifier is the one that matters.
+
+    `check_assumptions` re-scores at the edges of every ASSUMED constant the
+    design actually reaches, and flags a verdict that does not survive the span.
+    Set it False to skip that (the recursive call does, to terminate).
+    """
+    unmodelled = design.unmodelled()
+    if unmodelled:
+        raise OutOfTwinScopeError(unmodelled)
+
     twin = ExperimentTwin(params=params, seed=seed)
     plates = twin.simulate_many(design, n_sims)
 
@@ -229,7 +288,7 @@ def score_design(
             "leave too little to test."
         )
 
-    return DesignScore(
+    score = DesignScore(
         power=power,
         testable_rate=testable_rate,
         mean_usable_wells=mean_usable,
@@ -240,6 +299,68 @@ def score_design(
         replicates_needed=reps_needed,
         n_conditions=len(design.conditions),
         diagnoses=diagnoses,
+    )
+
+    if check_assumptions:
+        _annotate_assumption_sensitivity(score, design, params, n_sims, seed)
+    return score
+
+
+# ---------------------------------------------------------------------------
+# Assumption sensitivity
+#
+# The twin's soft spots are tagged ASSUMED in calibration.py, and one of them -
+# how much an antifibrinolytic extends scaffold survival - is directly reachable
+# by a design: setting one boolean multiplies the Weibull scale by a number
+# nothing in Experiment 4 constrains.
+#
+# That makes it the one place a design can score well by finding a generous
+# corner of the model rather than by being good. The response is not to remove
+# the constant, which would be to pretend antifibrinolytics do nothing, but to
+# refuse to present a verdict that depends on its value.
+# ---------------------------------------------------------------------------
+
+
+def _annotate_assumption_sensitivity(
+    score: DesignScore,
+    design: DesignSpec,
+    params: TwinParams,
+    n_sims: int,
+    seed: int | None,
+) -> None:
+    """Re-score at the edges of each ASSUMED constant this design reaches."""
+    if not design.antifibrinolytic:
+        return  # the design never touches the assumed constant
+
+    score.assumptions_in_play.append("aprotinin_hazard_scale")
+    lo, hi = APROTININ_HAZARD_SCALE_RANGE
+
+    # Same seed at both ends, so the comparison is paired and a difference is
+    # the constant's doing rather than simulation noise.
+    edges = [
+        score_design(
+            design,
+            params=replace(params, aprotinin_hazard_scale=value),
+            n_sims=n_sims,
+            seed=seed,
+            check_assumptions=False,
+        )
+        for value in (lo, hi)
+    ]
+    powers = [e.power for e in edges]
+    score.power_range_under_assumptions = (min(powers), max(powers))
+
+    if edges[0].verdict == edges[1].verdict:
+        return  # the verdict holds across the whole plausible span
+
+    score.verdict_sensitive_to_assumption = True
+    score.diagnoses.append(
+        f"this verdict depends on an ASSUMED constant. Aprotinin's effect on "
+        f"scaffold survival was never measured in Experiment 4; across its "
+        f"plausible range ({lo:g}x to {hi:g}x) the power of this design runs "
+        f"{min(powers):.0%} to {max(powers):.0%} and the conclusion itself "
+        f"changes. The design may be sound, but this twin cannot say so - "
+        f"calibrating an antifibrinolytic arm is what would settle it."
     )
 
 

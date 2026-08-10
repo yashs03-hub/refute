@@ -29,10 +29,11 @@ import math
 import os
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from .design import DesignSpec
+from .design import DesignSpec, OutOfTwinScopeError
 from .score import DesignScore, score_design
 
 # A request may not ask for unbounded simulation. 400 plates is the CLI default
@@ -93,6 +94,21 @@ class ScoreResponse(BaseModel):
         description="The replication required exceeds one plate. No change to "
         "timing or formulation recovers this - a finding, not a failure."
     )
+    feasibility: str = Field(
+        description="'feasible' | 'infeasible' | 'unestimable'. The third is "
+        "distinct: the design left too little to say what it would need."
+    )
+    verdict_sensitive_to_assumption: bool = Field(
+        description="True if this verdict does not survive the plausible range "
+        "of an ASSUMED constant. Treat the numbers as one point in a span."
+    )
+    assumptions_in_play: list[str] = Field(
+        description="Uncalibrated constants this design actually reaches."
+    )
+    power_range_under_assumptions: tuple[float, float] | None = Field(
+        default=None,
+        description="Power at the edges of those constants' plausible range.",
+    )
     diagnoses: list[str] = Field(
         description="Consequences, never corrections: what went wrong, not what to add."
     )
@@ -114,6 +130,10 @@ class ScoreResponse(BaseModel):
             n_conditions=score.n_conditions,
             failed=score.failed,
             infeasible_as_scoped=score.infeasible_as_scoped,
+            feasibility=score.feasibility,
+            verdict_sensitive_to_assumption=score.verdict_sensitive_to_assumption,
+            assumptions_in_play=list(score.assumptions_in_play),
+            power_range_under_assumptions=score.power_range_under_assumptions,
             diagnoses=list(score.diagnoses),
             summary=score.summary(),
         )
@@ -183,6 +203,25 @@ class AssayStatus(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@app.exception_handler(OutOfTwinScopeError)
+def _out_of_scope_handler(_request: Request, exc: OutOfTwinScopeError) -> JSONResponse:
+    """422 with a machine-readable reason, on every endpoint that scores.
+
+    Registered once rather than caught per-endpoint so no future endpoint can
+    forget it and silently return a number instead. The `error` key makes this
+    distinguishable from a schema-validation 422, which shares the status code
+    but means something entirely different.
+    """
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "out_of_twin_scope",
+            "out_of_scope": exc.reasons,
+            "detail": str(exc),
+        },
+    )
 
 
 @app.get("/healthz", summary="Liveness. Calls nothing.")

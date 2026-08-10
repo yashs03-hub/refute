@@ -97,6 +97,17 @@ APROTININ_HAZARD_SCALE = 4.0
 APROTININ_IS_ASSUMED = True
 APROTININ_RECOMMENDED_KIU_PER_ML = (100, 200)
 
+# ASSUMED range, and deliberately NOT a confidence interval - there is no data
+# to compute one from. It is the span of "roughly no benefit" to "roughly an
+# order of magnitude", which brackets what the fibrin-gel literature reports
+# without committing to any of it.
+#
+# Its purpose is procedural rather than descriptive. A design whose verdict
+# changes across this span scored well because of an assumption, and the scorer
+# must say so instead of returning the number obtained at the midpoint. See
+# `score_design`, which reports `verdict_sensitive_to_assumption`.
+APROTININ_HAZARD_SCALE_RANGE = (1.0, 10.0)
+
 # --------------------------------------------------------------------------
 # Well-level variation, attrition, measurement
 # --------------------------------------------------------------------------

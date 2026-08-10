@@ -79,6 +79,17 @@ class DesignSpec(BaseModel):
             "constructs detaching from anchors."
         )
     )
+    out_of_twin_scope: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Anything the design specifies that the fields above cannot "
+            "represent: a different matrix material, a change to cell seeding "
+            "density, an intervention that is not an antifibrinolytic, a "
+            "readout other than gel area. Record it verbatim and briefly. Do "
+            "NOT silently omit it - a design scored as though it had never "
+            "said this is not the design that was proposed."
+        ),
+    )
     rationale: str = Field(
         default="", description="One or two sentences on why this design."
     )
@@ -89,6 +100,44 @@ class DesignSpec(BaseModel):
 
     def fits_plate(self, plate_wells: int) -> bool:
         return self.total_wells <= plate_wells
+
+    def unmodelled(self) -> list[str]:
+        """Scope violations worth refusing over, blanks discarded.
+
+        An extractor emitting a stray empty string must not block a design the
+        twin can handle perfectly well. That error would be conservative rather
+        than permissive, but a verifier that cries wolf gets switched off, so it
+        is still worth not making.
+        """
+        return [r for r in self.out_of_twin_scope if r and r.strip()]
+
+
+class OutOfTwinScopeError(RuntimeError):
+    """Raised when a design does something the twin cannot represent.
+
+    The twin models one apparatus: an anchored fibrin gel, imaged for area,
+    failing by fibrinolysis. A design that changes the matrix, the seeding
+    density, or the readout is not a worse design - it is a design about which
+    this twin has nothing to say.
+
+    Scoring it anyway is the dangerous case, and the reason this raises rather
+    than warns. The extractor is instructed not to improve a design, so an
+    unrepresentable feature would simply be dropped, and the twin would return a
+    confident number for a plate nobody proposed. That is an error in the
+    permissive direction - the one direction a verifier must not fail in.
+    """
+
+    def __init__(self, reasons: list[str]):
+        self.reasons = list(reasons)
+        detail = "\n".join(f"    - {r}" for r in self.reasons)
+        super().__init__(
+            "this design specifies something the twin does not model, so no "
+            "score would be about the design that was proposed:\n"
+            f"{detail}\n"
+            "  The twin covers: anchored fibrin gel, area readout, "
+            "fibrinolytic scaffold loss, imaging schedule, replication.\n"
+            "  This is a limit of the twin, not a defect in the design."
+        )
 
 
 # The design Experiment 4 actually used. The twin must reproduce its observed

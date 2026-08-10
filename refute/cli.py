@@ -14,7 +14,7 @@ import argparse
 import json
 import sys
 
-from .design import EXPERIMENT_4_AS_RUN, DesignSpec
+from .design import EXPERIMENT_4_AS_RUN, DesignSpec, OutOfTwinScopeError
 from .score import feedback_for_agent, score_design
 
 
@@ -26,11 +26,31 @@ def _print(title: str, body: str) -> None:
     print()
 
 
+def _report_out_of_scope(exc: OutOfTwinScopeError) -> None:
+    """Report a design the twin cannot speak to, as a twin limit not a verdict.
+
+    Phrased carefully: the design is not being called bad. Saying "unscorable"
+    where the truth is "unmodelled" would teach exactly the wrong lesson, and
+    the whole point of raising here is to avoid a confident wrong number.
+    """
+    _print(
+        "NOT SCORED - outside the twin",
+        f"{exc}\n\n"
+        "Nothing is wrong with the design. The twin models one apparatus, and\n"
+        "this design leaves it. Scoring it anyway would report a number about a\n"
+        "different experiment - the permissive failure a verifier must not make.",
+    )
+
+
 def cmd_baseline(args: argparse.Namespace) -> int:
     design = EXPERIMENT_4_AS_RUN
     if args.design:
         design = DesignSpec.model_validate(json.loads(open(args.design).read()))
-    score = score_design(design, n_sims=args.sims)
+    try:
+        score = score_design(design, n_sims=args.sims)
+    except OutOfTwinScopeError as exc:
+        _report_out_of_scope(exc)
+        return 2
     _print(f"{design.total_wells}-well design, endpoint {design.endpoint_time_h:.0f} h",
            score.summary())
     return 0
@@ -247,7 +267,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     spec = extract_design(design_text, extractor=extractor)
     _print("EXTRACTED SPEC", spec.model_dump_json(indent=2))
 
-    score = score_design(spec, n_sims=args.sims)
+    try:
+        score = score_design(spec, n_sims=args.sims)
+    except OutOfTwinScopeError as exc:
+        # No revision turn: there is no consequence report to give, because the
+        # simulator never ran. Inventing feedback here would be the model
+        # judging the design, which is the thing this project exists to avoid.
+        _report_out_of_scope(exc)
+        _print("TOKENS", ledger_summary())
+        return 2
     _print("SIMULATED", score.summary())
 
     if args.no_revise:
@@ -261,7 +289,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     revised_spec = extract_design(revised_text, extractor=extractor)
     _print("EXTRACTED SPEC (revised)", revised_spec.model_dump_json(indent=2))
 
-    revised_score = score_design(revised_spec, n_sims=args.sims)
+    try:
+        revised_score = score_design(revised_spec, n_sims=args.sims)
+    except OutOfTwinScopeError as exc:
+        # A common and interesting case: told the scaffold dissolved, an agent
+        # may reasonably switch matrix material. That is a good instinct and the
+        # twin still cannot score it, so the first-round score stands alone.
+        _report_out_of_scope(exc)
+        _print("TOKENS", ledger_summary())
+        return 2
     _print("SIMULATED (revised)", revised_score.summary())
 
     _print(

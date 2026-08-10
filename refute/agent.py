@@ -19,6 +19,9 @@ alongside it. See `refute.providers` for why.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
+
 from .design import DesignSpec
 from .providers import DEFAULT_AGENT, DEFAULT_EXTRACTOR, ModelSpec, get_provider
 
@@ -66,6 +69,13 @@ fill in what a good design would have done. If the design omits something,
 record the omission faithfully - `false` for an absent antifibrinolytic, and so
 on. Convert all times to HOURS SINCE CASTING (Day 1 = 24, Day 5 = 120,
 Day 7 = 168, Day 10 = 240).
+
+If the design specifies something no field can represent - a different matrix
+material, a change to cell seeding density, an intervention that is not an
+antifibrinolytic, a readout other than gel area - list it in
+`out_of_twin_scope`. Do not drop it. Dropping it would produce a record of a
+different, simpler experiment than the one proposed, and it would then be
+scored as though the design had never said it.
 
 DESIGN
 ------
@@ -134,3 +144,57 @@ def extract_design(
     )
     assert isinstance(spec, DesignSpec)
     return spec
+
+
+# ---------------------------------------------------------------------------
+# The thing under test, as an interface
+#
+# `propose_design` and `revise_design` are one implementation - a single chat
+# completion. The benchmark is about design quality, not about that particular
+# scaffold, so the two methods a subject must supply are named separately from
+# the way this module happens to supply them.
+#
+# Anything satisfying `Agent` can be scored: a tool-using loop, a multi-agent
+# system, a human typing into a file. `refute.environment.RefuteEnv` accepts
+# designs from any source and is the usual way in; this Protocol is for callers
+# who want the CLI's propose-then-revise shape driven by their own agent.
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class Agent(Protocol):
+    """A subject of the benchmark. Two methods, both returning free text."""
+
+    def propose(self, brief: str) -> str:
+        """First attempt at a design, from the brief alone."""
+        ...
+
+    def revise(self, brief: str, previous_design: str, feedback: str) -> str:
+        """A second attempt, having been told what the simulator did to the first.
+
+        `feedback` reports consequences, never corrections. Working out the fix
+        is the part being measured.
+        """
+        ...
+
+
+@dataclass
+class ChatModelAgent:
+    """The reference `Agent`: one model, one completion per turn.
+
+    Deliberately thin. A richer scaffold here - retrieval, tool use, a critic -
+    would improve scores and make the result a measurement of the scaffold
+    rather than of the model, which is the same confound the extractor is held
+    constant to avoid.
+    """
+
+    spec: ModelSpec = DEFAULT_AGENT
+
+    def propose(self, brief: str) -> str:
+        return propose_design(brief, self.spec)
+
+    def revise(self, brief: str, previous_design: str, feedback: str) -> str:
+        return revise_design(brief, previous_design, feedback, self.spec)
+
+    def __str__(self) -> str:
+        return str(self.spec)
