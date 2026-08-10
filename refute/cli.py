@@ -406,6 +406,22 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_harnesses(args: argparse.Namespace) -> int:
+    """The harness is a variable, not a constant. Say what each one is."""
+    from .harness import describe
+
+    _print("HARNESSES", describe())
+    return 0
+
+
+def _cmd_demo(args: argparse.Namespace) -> int:
+    # Imported lazily: `demo` imports this module back, to delegate to the same
+    # cmd_* functions the CLI exposes so the two cannot drift apart.
+    from .demo import cmd_demo
+
+    return cmd_demo(args)
+
+
 def cmd_providers(args: argparse.Namespace) -> int:
     """What can actually be called right now, and why not if it can't."""
     from .providers import DEFAULT_AGENT, DEFAULT_EXTRACTOR, available
@@ -434,11 +450,25 @@ def cmd_run(args: argparse.Namespace) -> int:
     from .providers import DEFAULT_EXTRACTOR, ledger_summary, spec_from_string
     from .record import RecordedRound, RecordedRun
 
+    from .harness import get_harness
+
     agent = spec_from_string(args.agent, args.agent_effort)
     extractor = (
         spec_from_string(args.extractor, "low") if args.extractor else DEFAULT_EXTRACTOR
     )
-    print(f"agent     {agent}\nextractor {extractor}  (held constant)\n")
+    try:
+        harness = get_harness(args.harness, agent)
+    except KeyError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+
+    # The pair is the unit of measurement, so both are printed and both are
+    # recorded. A score attributed to a model alone cannot be interpreted.
+    print(
+        f"agent     {agent}\n"
+        f"harness   {harness.name}  ({harness.adds})\n"
+        f"extractor {extractor}  (held constant)\n"
+    )
 
     # Recorded unconditionally. A paid run whose prose is not kept cannot be
     # re-scored after a calibration change, which is how the first live result's
@@ -447,6 +477,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         agent=str(agent),
         extractor=str(extractor),
         brief=EXPERIMENT_4_BRIEF,
+        harness=harness.name,
         recorded_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
 
@@ -456,7 +487,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         path = record.save(args.record)
         print(f"[recorded {len(record.rounds)} round(s) -> {path}]\n")
 
-    design_text = propose_design(agent=agent)
+    design_text = harness.propose(EXPERIMENT_4_BRIEF)
     _print("PROPOSED DESIGN", design_text)
 
     spec = extract_design(design_text, extractor=extractor)
@@ -481,7 +512,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     feedback = feedback_for_agent(score)
     record.rounds[-1].feedback_given = feedback
-    revised_text = revise_design(EXPERIMENT_4_BRIEF, design_text, feedback, agent=agent)
+    revised_text = harness.revise(EXPERIMENT_4_BRIEF, design_text, feedback)
     _print("REVISED DESIGN", revised_text)
 
     revised_spec = extract_design(revised_text, extractor=extractor)
@@ -555,6 +586,21 @@ def main(argv: list[str] | None = None) -> int:
         help="score the reference designs, so an agent's number has a scale",
     ).set_defaults(func=cmd_baselines)
 
+    sub.add_parser(
+        "harnesses",
+        parents=[common],
+        help="what each harness adds, and why the pair is the unit",
+    ).set_defaults(func=cmd_harnesses)
+
+    p_demo = sub.add_parser(
+        "demo", parents=[common], help="the pitch, in order, with nothing to type"
+    )
+    p_demo.add_argument(
+        "--no-pause", action="store_true", help="do not wait between beats"
+    )
+    p_demo.add_argument("--beat", type=int, help="run a single beat")
+    p_demo.set_defaults(func=_cmd_demo)
+
     p_check = sub.add_parser(
         "check-extraction",
         parents=[common],
@@ -595,6 +641,11 @@ def main(argv: list[str] | None = None) -> int:
         "run", parents=[common], help="propose -> simulate -> revise (needs API key)"
     )
     p_run.add_argument("--no-revise", action="store_true")
+    p_run.add_argument(
+        "--harness",
+        default="single-shot",
+        help="scaffolding around the model: single-shot | self-critique | checklist",
+    )
     p_run.add_argument(
         "--record",
         metavar="PATH",

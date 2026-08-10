@@ -70,6 +70,10 @@ class RecordedRun:
     agent: str
     extractor: str
     brief: str
+    # A score belongs to a (model x harness) pair, so the harness is part of the
+    # record. Defaulted rather than required: runs recorded before harnesses
+    # existed were all single-shot, which is exactly what the default says.
+    harness: str = "single-shot"
     rounds: list[RecordedRound] = field(default_factory=list)
     recorded_at: str | None = None
     notes: str = ""
@@ -80,6 +84,7 @@ class RecordedRun:
             "schema_version": self.schema_version,
             "agent": self.agent,
             "extractor": self.extractor,
+            "harness": self.harness,
             "brief": self.brief,
             "recorded_at": self.recorded_at,
             "notes": self.notes,
@@ -99,6 +104,7 @@ class RecordedRun:
             agent=d["agent"],
             extractor=d["extractor"],
             brief=d["brief"],
+            harness=d.get("harness", "single-shot"),
             rounds=[RecordedRound.from_dict(r) for r in d["rounds"]],
             recorded_at=d.get("recorded_at"),
             notes=d.get("notes", ""),

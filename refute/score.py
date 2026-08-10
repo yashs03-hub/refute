@@ -12,6 +12,7 @@ per-well curve fit.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -185,13 +186,25 @@ class DesignScore:
                 f"{', '.join(self.assumptions_in_play)}. Read the single number "
                 f"below as one point inside that span, not as a result."
             )
+        # `nan` and `-1` mean "not estimable" internally. Printing them raw leaks
+        # a sentinel into human output, where -1 reads as a real count and `nan`
+        # reads as a crash. Same defect as at the JSON boundary, different edge.
+        mde = (
+            "not estimable"
+            if math.isnan(self.min_detectable_ratio_diff)
+            else f"{self.min_detectable_ratio_diff:.3f}"
+        )
+        reps = (
+            "not estimable" if self.replicates_needed <= 0
+            else str(self.replicates_needed)
+        )
         lines += [
             f"power to recover injected effect : {self.power:.0%}",
             f"plates yielding a testable result: {self.testable_rate:.0%}",
             f"mean usable wells per plate      : {self.mean_usable_wells:.1f}",
             f"mean fraction lysed by endpoint  : {self.mean_lysed_fraction:.0%}",
-            f"min detectable ratio difference  : {self.min_detectable_ratio_diff:.3f}",
-            f"replicates per arm actually needed: {self.replicates_needed}",
+            f"min detectable ratio difference  : {mde}",
+            f"replicates per arm actually needed: {reps}",
         ]
         if self.diagnoses:
             lines.append("")

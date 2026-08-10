@@ -541,7 +541,39 @@ The six protocols become worked examples; the sweep becomes the finding.
   environment, `DesignSpec` → action space, `score_design` → reward
 - **Afternoon** — freeze. README, rehearse, stop building
 
-### 7.4 The demo
+### 7.4 The demo — now one command
+
+**`refute demo`.** Built 2026-08-10. Six beats in a fixed order, each carrying the
+line to say and the computation behind it, with a pause between. Runs in ~6s of
+compute; the rest is talking.
+
+Two reasons it exists rather than a list of commands in this file. Five commands
+typed live, with flags, while talking, is five chances to mistype or scroll past
+the number that matters. And **the order is load-bearing**: if the agent's refusal
+(beat 6) is shown before the one-plate ceiling (beat 3), the refusal reads as the
+model failing rather than as the model agreeing with the simulator. A test pins
+that ordering.
+
+Each beat delegates to the same `cmd_*` function the CLI exposes, so the demo
+cannot drift from what the tool does. Both degradation paths are tested: a missing
+recorded run explains itself (and warns against running the agent live), and a
+missing CSV says so rather than raising mid-presentation.
+
+The beats, and why in this order:
+
+| # | Beat | Why here |
+|---|---|---|
+| 1 | The real data | Opens on `6/6` vs `0/4` in the last column. Not a claim — the CSV |
+| 2 | Score the as-run design | 0% power, 50% lysed, and it *refuses* to say how many wells were needed |
+| 3 | **Is it the design or the apparatus?** | `EXPERT` 9%, `CEILING` 83%. The finding, with no model in the loop |
+| 4 | Two separable defects | Neither fix alone is enough |
+| 5 | Why it is not in the literature | The asymmetry, as a measurement |
+| 6 | **What a frontier model did** | 1% lysis without the reagent, then declined — and the scorer gave that 0% until it was fixed |
+
+`refute check-extraction` stays out of the script — it needs a key, and its result
+is a sentence you can just say.
+
+### 7.4-old The demo (superseded by `refute demo`, kept for the reasoning)
 
 1. A real experiment that failed, with the data — 30 s
 2. `refute baseline` **live** — 0% power, 50% of wells lysed. Instant, no network
@@ -1079,3 +1111,76 @@ becomes 44% in the requirement.
 Not a defect — the informative content is *tens of wells, not three* — but say
 "tens of wells" or "~50", never "49". Pinned by a test so it is not mistaken for
 precision later.
+
+---
+
+## 11. The harness, made a variable
+
+Built 2026-08-10. Reverses a position taken earlier in this file, so the reasoning
+matters more than the code.
+
+**What §9.4 said.** `ChatModelAgent` is deliberately thin — one completion per turn
+— because "a richer scaffold would raise scores and make the result a measurement
+of the scaffold rather than of the model." That is true.
+
+**Why it was still wrong.** The conclusion drawn from it was to keep the harness
+thin *and singular*, which does not remove the confound — it hides it. A single
+harness is not a controlled variable, it is an **unreported** one. Every number in
+this project has silently been a (model × harness) result while being quoted as a
+model result.
+
+**The fix is the same discipline used for the extractor**, applied one level up:
+name the thing, hold it constant when comparing models, and vary it deliberately
+when that is the question. `refute/harness.py` provides three, each declaring what
+it adds, and both the CLI and `RecordedRun` now print and store which was used.
+
+| harness | calls/turn | adds |
+|---|---|---|
+| `single-shot` | 1 | nothing — the control, identical to `ChatModelAgent` |
+| `self-critique` | 3 | draft → hostile self-review → final |
+| `checklist` | 1 | a forced quantitative pre-design worksheet |
+
+### 11.1 The boundary that must not move
+
+**No harness is given the twin.** A harness may restructure the model's own
+reasoning; it may not consult the scorer. Handing it the simulator turns the
+benchmark into a search against `twin.py` — §9.1's Goodhart failure, arriving
+through the harness rather than through the optimizer.
+
+**No harness prompt may name the answers.** This is easier to violate than the
+brief, because a "helpful" checklist item is exactly where a hint goes. A test
+asserts that neither `CRITIQUE_PROMPT` nor `CHECKLIST_PROMPT` contains
+fibrinolysis, an antifibrinolytic, a well count, or even the word *fibrin* — they
+ask only the questions a methods reviewer asks of any experiment.
+
+`self-critique` also does **not** add a review pass on the revision turn: the
+simulator's feedback already is an external critique, and a stronger one. Stacking
+self-review on top would make "responded to consequences" and "reviewed itself"
+indistinguishable.
+
+### 11.2 The experiment this makes possible
+
+Sharper than "can scores be raised". Experiment 4's central defect was n=3 — a
+**computable** error, not an exotic one.
+
+- If `checklist` fixes it, the deficiency was an **un-done calculation**: the model
+  always knew how, and nobody made it stop and multiply.
+- If `checklist` does *not* fix it, the deficiency is **knowledge of what goes
+  wrong**, which is precisely the survivorship claim this project rests on.
+
+Either outcome is a result, and the single-shot harness cannot distinguish them.
+That is the strongest reason to have built this rather than a UI.
+
+**Not yet run** — three harnesses × one model is three paid runs, and §10 showed
+what happens when those are spent before the checks are in place. `refute run
+--harness self-critique` is one command when there is budget for it. The recorded
+`gpt-5.5-high.json` is `single-shot`, correctly labelled, so it stays comparable.
+
+### 11.3 What was NOT built, and why
+
+**Tool use.** A function-calling harness with a power calculator was the obvious
+next step and is deliberately absent. The tool a design most needs is a variance
+estimate, and the only calibrated variance in this repo is the twin's — so a power
+tool is the twin wearing a hat. Building it would cross §11.1's boundary while
+looking like a capability improvement. If it is built later, the variance must come
+from the agent's own stated assumptions, not from `calibration.py`.

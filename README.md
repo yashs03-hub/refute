@@ -152,6 +152,15 @@ invented ground truth this project exists to object to.
 ## Usage
 
 ```bash
+python -m refute.cli demo           # the whole argument, in order, nothing to type
+```
+
+Six beats, ~5 minutes of material, **no network and no API key** — the real data,
+the as-run design, the one-plate ceiling, the two separable defects, the
+literature asymmetry, and a recorded frontier-model run that ends by declining to
+run the experiment. `--no-pause` to pipe it, `--beat N` for one section.
+
+```bash
 pip install -e ".[dev]"
 pytest                              # the twin's contract
 
@@ -202,6 +211,35 @@ while True:
         break
     brief = obs                                 # the simulator's consequence report
 ```
+
+### The harness is a variable, not a constant
+
+```bash
+python -m refute.cli harnesses
+python -m refute.cli run --harness self-critique
+```
+
+| harness | calls/turn | adds |
+|---|---|---|
+| `single-shot` | 1 | nothing — the control |
+| `self-critique` | 3 | one adversarial self-review before submitting |
+| `checklist` | 1 | a forced quantitative pre-design worksheet |
+
+A score belongs to a **(model × harness)** pair. Quoting one without the other is
+the same error as varying the extractor alongside the agent — you cannot tell
+whether the model designed better or the scaffolding did. Both are printed and
+both are recorded.
+
+**No harness is given the twin.** A harness may restructure the model's own
+reasoning; it may not consult the scorer, or the benchmark measures search against
+the simulator rather than judgement. No harness prompt names a mechanism, a
+reagent, or a number of wells — pinned by a test, same as the brief.
+
+The question they exist to answer is sharper than "can scores be raised".
+Experiment 4's central defect was n=3, a **computable** error. If `checklist`
+fixes it, the deficiency was an un-done calculation. If it does not, the
+deficiency is knowledge of what goes wrong — which is this project's whole claim.
+The thin harness alone cannot distinguish those.
 
 `reward` is `DesignScore.power` — the probability the design recovers the
 injected effect. It is deliberately *not* a weighted composite: the full score
@@ -285,10 +323,13 @@ refute/
                    that calls a model)
   environment.py   reset / step — the benchmark as an environment for any agent
   api.py           HTTP: /score (free) · /score/text · /run (opt-in) · /assays
+  harness.py       single-shot / self-critique / checklist — the scaffolding,
+                   as an explicit variable
   record.py        serialise a run; replay re-scores against the current twin
-  extraction_cases.py  5 adversarial designs with known specs
-  cli.py           baseline · baselines · sweep · assays · calibrate ·
-                   check-extraction · replay · providers · run
+  extraction_cases.py  6 adversarial designs with known specs
+  demo.py          the pitch as one command, six beats, no network
+  cli.py           demo · baseline · baselines · sweep · assays · calibrate ·
+                   harnesses · check-extraction · replay · providers · run
 cases/exp4/        observed data + provenance
 tests/             the calibration contract
 ```
