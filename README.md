@@ -97,6 +97,36 @@ export ANTHROPIC_API_KEY=...
 python -m refute.cli run            # propose → simulate → revise, with the delta
 ```
 
+### Scoring your own agent
+
+`refute.cli run` benchmarks a single chat completion. To score something else —
+a tool-using loop, a multi-agent system, anything — drive the environment
+directly. The reward is the twin's verdict, not a model's opinion of your design.
+
+```python
+from refute import RefuteEnv
+
+env = RefuteEnv()
+brief = env.reset()
+
+while True:
+    design = your_agent(brief)                  # free text, or a DesignSpec
+    obs, reward, done, info = env.step(design)
+    if done:
+        break
+    brief = obs                                 # the simulator's consequence report
+```
+
+`reward` is `DesignScore.power` — the probability the design recovers the
+injected effect. It is deliberately *not* a weighted composite: the full score
+is in `info["design_score"]`, so a different objective is yours to build rather
+than ours to bury in a constant nothing in Experiment 4 constrains.
+
+Passing a `DesignSpec` calls no model and needs no key. Passing prose costs one
+extractor call, and extraction failures are reported as
+`info["error"] == "extraction_failed"` rather than scored as a bad design — a
+provider outage must not look like an agent designing badly.
+
 ## Honest limits
 
 State these alongside any result.
@@ -125,6 +155,7 @@ refute/
   design.py        DesignSpec — the contract between extractor and twin
   score.py         power, testability, minimum detectable effect, diagnosis
   agent.py         propose / revise / extract  (the only file that calls a model)
+  environment.py   reset / step — the benchmark as an environment for any agent
   cli.py           baseline · sweep · run
 cases/exp4/        observed data + provenance
 tests/             the calibration contract

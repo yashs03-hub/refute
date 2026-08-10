@@ -15,6 +15,7 @@ whether the design looks sensible.
 
 from .calibration import DEFAULT_PARAMS, TwinParams
 from .design import EXPERIMENT_4_AS_RUN, DesignSpec
+from .environment import RefuteEnv, StepResult
 from .score import DesignScore, feedback_for_agent, score_design
 from .twin import ExperimentTwin, PlateResult, WellResult
 
@@ -25,6 +26,8 @@ __all__ = [
     "DesignSpec",
     "ExperimentTwin",
     "PlateResult",
+    "RefuteEnv",
+    "StepResult",
     "TwinParams",
     "WellResult",
     "feedback_for_agent",
