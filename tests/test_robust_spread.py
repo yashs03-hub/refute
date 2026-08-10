@@ -136,6 +136,52 @@ def test_a_protected_design_is_estimable_and_stable():
     assert max(values) - min(values) <= 10, f"unstable across seeds/sims: {values}"
 
 
+def test_replicates_needed_is_only_order_of_magnitude_far_from_power():
+    """Recorded so it is not mistaken for precision later.
+
+    `replicates_needed` scales as (SD/gap)^2, so for a design far from powered - a
+    small gap relative to noise - a modest error in the gap estimate is squared.
+    The agent's round-1 design (2% power) ranges 28-79 wells per arm across seeds
+    and simulation counts and does not converge at n_sims=1600, while `power` and
+    `testable_rate` are stable to a point or two.
+
+    That is a property, not a defect: the order of magnitude is the informative
+    part (tens of wells, not three), and refusing the number would lose real
+    signal. But it must never be quoted as a precise figure.
+    """
+    from refute.design import DesignSpec
+
+    far_from_power = DesignSpec(
+        conditions=["N-SS", "N-T", "N-CM", "N-CM+T"],
+        replicates_per_condition=3,
+        imaging_times_h=[1.0, 4.0, 8.0, 24.0, 48.0, 72.0],
+        treatment_time_h=1.0,
+        endpoint_time_h=72.0,
+        antifibrinolytic=False,
+        normalise_to_own_baseline=True,
+        locked_imaging_protocol=True,
+    )
+
+    scores = [
+        score_design(far_from_power, n_sims=n, seed=s)
+        for n in (400, 800)
+        for s in (0, 1, 2)
+    ]
+    reps = [s.replicates_needed for s in scores]
+    powers = [s.power for s in scores]
+
+    assert all(r > 0 for r in reps), reps
+    # Power is stable...
+    assert max(powers) - min(powers) < 0.05, powers
+    # ...while the requirement is not, by a wide margin. Both are tens of wells,
+    # which is the claim that survives.
+    assert all(20 <= r <= 120 for r in reps), reps
+    assert max(reps) / min(reps) > 1.3, (
+        f"reps has become stable ({reps}). If a better estimator landed, update "
+        "the order-of-magnitude caveat in PLAN 9.7 rather than deleting this test."
+    )
+
+
 def test_the_guard_discards_almost_nothing():
     """If the floor were removing a meaningful share of wells it would be a
     selection effect rather than an artifact filter."""

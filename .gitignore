@@ -16,6 +16,15 @@ dist/
 runs/
 *.out.json
 
+# ...except recorded agent runs, which are NOT regenerable. Re-running costs
+# money and a model does not repeat itself, so a recorded run is primary data
+# rather than output - and the demo replays it precisely so the result does not
+# depend on a network or a rate limit. It must be in version control.
+# Both lines are needed: git cannot re-include a file whose parent directory is
+# excluded, so the directory has to be un-ignored before its contents.
+!cases/**/runs/
+!cases/**/runs/**
+
 # --- git worktrees created inside the repo ---
 # Each holds a full copy of the tree, so committing one would nest the repo in
 # itself. Scoped to worktrees/ rather than all of .claude/ on purpose: project

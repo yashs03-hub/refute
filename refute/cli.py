@@ -372,18 +372,37 @@ def cmd_replay(args: argparse.Namespace) -> int:
         _print(f"{label} - EXTRACTED", rnd.extracted.model_dump_json(indent=2))
         _print(f"{label} - SIMULATED", score.summary())
 
+    recomputed = (
+        "Scores are recomputed against the current twin, not read back from the "
+        "file,\nso this reflects the calibration in force now."
+    )
+
     if len(scores) >= 2:
         first, last = scores[0], scores[-1]
-        _print(
-            "DELTA",
-            f"power      {first.power:.0%} -> {last.power:.0%}\n"
-            f"testable   {first.testable_rate:.0%} -> {last.testable_rate:.0%}\n"
-            f"lysed      {first.mean_lysed_fraction:.0%} -> "
-            f"{last.mean_lysed_fraction:.0%}\n"
-            f"n/arm needed {first.replicates_needed} -> {last.replicates_needed}\n\n"
-            "Scores are recomputed against the current twin, not read back from "
-            "the file,\nso this reflects the calibration in force now.",
-        )
+        if last.declined:
+            # "2% -> 0%" would read as a regression. What happened is the agent
+            # stopped and argued the question is unanswerable at this scale, which
+            # is not on the same scale as a power figure.
+            _print(
+                "OUTCOME",
+                "The final round DECLINED to run the experiment.\n\n"
+                f"Round 1: {first.power:.0%} power, {first.testable_rate:.0%} "
+                f"testable, ~{first.replicates_needed} wells per arm needed.\n"
+                "Final:   no plate at this scale can resolve the effect.\n\n"
+                "This is NOT a regression - the rounds are not comparable. Whether "
+                "declining\nwas correct is answered by `refute baselines`.\n\n"
+                + recomputed,
+            )
+        else:
+            _print(
+                "DELTA",
+                f"power      {first.power:.0%} -> {last.power:.0%}\n"
+                f"testable   {first.testable_rate:.0%} -> {last.testable_rate:.0%}\n"
+                f"lysed      {first.mean_lysed_fraction:.0%} -> "
+                f"{last.mean_lysed_fraction:.0%}\n"
+                f"n/arm needed {first.replicates_needed} -> "
+                f"{last.replicates_needed}\n\n" + recomputed,
+            )
     return 0
 
 
@@ -482,6 +501,24 @@ def cmd_run(args: argparse.Namespace) -> int:
         _print("TOKENS", ledger_summary())
         return 2
     _print("SIMULATED (revised)", revised_score.summary())
+
+    if revised_score.declined:
+        # A delta table here would read as 2% -> 0%, i.e. the revision made
+        # things worse, when what happened is that the agent stopped and argued
+        # the question is unanswerable at this scale. Those are not comparable.
+        _print(
+            "OUTCOME",
+            "The revision DECLINED to run the experiment rather than proposing a "
+            "worse plate.\n\n"
+            f"Round 1 scored {score.power:.0%} power, {score.testable_rate:.0%} "
+            f"testable, needing ~{score.replicates_needed} wells per arm.\n"
+            "Round 2 concluded no plate at this scale can resolve the effect.\n\n"
+            "Do NOT read this as a regression - the two rounds are not on the same "
+            "scale.\nWhether declining was correct is answered by `refute "
+            "baselines`, which scores\nthe best design available on one plate.",
+        )
+        _print("TOKENS", ledger_summary())
+        return 0
 
     _print(
         "DELTA",

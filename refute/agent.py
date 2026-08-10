@@ -13,6 +13,19 @@ The brief given to the agent contains only what was knowable BEFORE Experiment
 4 was run. It must never mention fibrinolysis, aprotinin, the observed lysis
 split, or the contraction half-time - those are the answers.
 
+It DOES state what the apparatus can measure, and that line was added on
+2026-08-10 after two live runs were refused a score. gpt-5.5 proposed
+quantifying neck-width narrowing rather than projected area, which the twin
+cannot simulate - its measurement model is calibrated for area segmentation
+specifically. The brief had constrained the plate count and the camera but not
+the readout, so the design was rejected for using the equipment differently than
+assumed. That measures conformance to an unstated convention, not design quality.
+
+Stating it leaks nothing: the readout is the standard one for the Roberts 2022
+model and is a property of the equipment, in the same class as "ONE 12-well
+plate". Neither defect the agent has to rediscover - n=3, and no reasoning about
+scaffold loss - is hinted at by naming the units.
+
 The agent model is a parameter; the extractor model should NOT be varied
 alongside it. See `refute.providers` for why.
 """
@@ -49,6 +62,9 @@ AVAILABLE
 - Fibrinogen, thrombin, CaCl2. Standard culture reagents.
 - Recombinant TGF-b1. MSC-conditioned media.
 - Imaging: a phone camera on a fixed rig. No microscope, no gel-doc, no scanner.
+- Quantification: projected gel area from those images, as a percentage of the
+  well area. This is the only quantity the setup measures - there is no force
+  transducer, and the images do not support anything finer.
 - ONE 12-well plate. This is the whole experiment.
 
 DELIVERABLE
@@ -70,12 +86,17 @@ record the omission faithfully - `false` for an absent antifibrinolytic, and so
 on. Convert all times to HOURS SINCE CASTING (Day 1 = 24, Day 5 = 120,
 Day 7 = 168, Day 10 = 240).
 
-If the design specifies something no field can represent - a different matrix
-material, a change to cell seeding density, an intervention that is not an
-antifibrinolytic, a readout other than gel area - list it in
-`out_of_twin_scope`. Do not drop it. Dropping it would produce a record of a
-different, simpler experiment than the one proposed, and it would then be
-scored as though the design had never said it.
+`out_of_twin_scope` is for SUBSTITUTIONS ONLY, and is usually empty. Use it if
+and only if the design changes the apparatus itself: a matrix that is not fibrin,
+a readout that is not gel area, a different vessel or anchoring scheme, or an
+added agent that alters scaffold degradation without being an antifibrinolytic.
+
+Do NOT put ordinary protocol detail there. Concentrations, seeding density, media
+and serum, growth factor doses, medium changes, area units, the analysis plan and
+QC or exclusion criteria are all normal parts of a fibrin-gel design, not
+deviations from it - a design that simply describes this assay carefully has an
+EMPTY `out_of_twin_scope`. Listing such detail wrongly blocks the design from
+being scored at all.
 
 DESIGN
 ------

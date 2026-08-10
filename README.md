@@ -124,6 +124,31 @@ so the binding constraint is the apparatus, not the design.
 Compare an agent against `expert`, not against the as-run design. Beating a
 design that scored zero is not evidence of anything.
 
+### What a frontier model actually did
+
+`refute replay cases/exp4/runs/gpt-5.5-high.json` — a recorded run, no network
+needed.
+
+gpt-5.5 reproduced the original design's underpowering, then given consequence
+feedback found a strategy neither the original researcher nor the `expert`
+baseline used: treat at 1 h and end at 72 h, **finishing before the fibrinolysis
+window opens** rather than spending a reagent to survive it. Scaffold loss fell to
+1% with no antifibrinolytic at all, which isolates measurement precision as the
+sole remaining constraint.
+
+Then it **declined to run the experiment**:
+
+> *"No-go for the biological question. There is no one-12-well-plate design that
+> will actually answer whether MSC-conditioned medium suppresses TGF-β1-driven
+> contraction... approximately 130–140 cast wells, not 12."*
+
+Which is this benchmark's own conclusion, reached independently — and **the scorer
+gave it 0% power**, the worst score available, until that was fixed. A declined
+design is now its own verdict (`feasibility == "declined"`), nothing is simulated,
+and no power number is printed. What a correct refusal is *worth* against a 9%
+plate is left deliberately unresolved: inventing that number would be the kind of
+invented ground truth this project exists to object to.
+
 ## Usage
 
 ```bash

@@ -95,8 +95,15 @@ class ScoreResponse(BaseModel):
         "timing or formulation recovers this - a finding, not a failure."
     )
     feasibility: str = Field(
-        description="'feasible' | 'infeasible' | 'unestimable'. The third is "
-        "distinct: the design left too little to say what it would need."
+        description="'feasible' | 'infeasible' | 'unestimable' | 'declined'. The "
+        "last two are distinct from a low score: 'unestimable' means the design "
+        "left too little to say what it would need, 'declined' means it assigned "
+        "no wells at all."
+    )
+    declined: bool = Field(
+        description="True if the design declines to run the experiment. Power and "
+        "testability are then placeholders, not measurements - nothing was "
+        "simulated. Declining can be the correct answer; compare `refute baselines`."
     )
     verdict_sensitive_to_assumption: bool = Field(
         description="True if this verdict does not survive the plausible range "
@@ -131,6 +138,7 @@ class ScoreResponse(BaseModel):
             failed=score.failed,
             infeasible_as_scoped=score.infeasible_as_scoped,
             feasibility=score.feasibility,
+            declined=score.declined,
             verdict_sensitive_to_assumption=score.verdict_sensitive_to_assumption,
             assumptions_in_play=list(score.assumptions_in_play),
             power_range_under_assumptions=score.power_range_under_assumptions,

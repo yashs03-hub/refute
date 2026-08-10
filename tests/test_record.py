@@ -158,6 +158,29 @@ def test_cli_replay_verbose_shows_the_prose(tmp_path, capsys):
     assert "four arms, n=3, day 10" in capsys.readouterr().out
 
 
+def test_any_committed_run_still_replays():
+    """Recorded runs in the repo must stay replayable as the twin changes.
+
+    A recorded run is primary data - re-running costs money and a model does not
+    repeat itself - so it is version-controlled rather than regenerated. That
+    makes it a fixture the code must keep honouring: if a `DesignSpec` field is
+    renamed or the schema version moves, this fails here rather than during a
+    demo. Skips cleanly until the first run is recorded.
+    """
+    from pathlib import Path
+
+    runs = sorted(Path("cases").glob("*/runs/*.json"))
+    if not runs:
+        pytest.skip("no recorded runs yet (refute run --record)")
+
+    for path in runs:
+        run = RecordedRun.load(path)
+        assert run.rounds, f"{path} records no rounds"
+        assert run.agent, f"{path} does not say which model produced it"
+        scores = replay(run, n_sims=100)
+        assert len(scores) == len(run.rounds)
+
+
 def test_cli_replay_refuses_an_out_of_scope_round(tmp_path, capsys):
     from refute.cli import main
 

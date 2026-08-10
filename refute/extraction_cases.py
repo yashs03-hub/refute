@@ -127,6 +127,48 @@ normalisation, fixed imaging rig.""",
         probes=("scope",),
         note="A design the twin cannot represent. Silence here is the bug.",
     ),
+    # ------------------------------------------------- scope, false positive
+    #
+    # Regression on a real failure. The first recorded gpt-5.5 run was refused a
+    # score entirely because the extractor listed its formulation, media,
+    # exclusion criteria, area units and analysis plan as "out of twin scope" -
+    # dutifully following a field description that said "anything the fields
+    # cannot represent". Every real design contains such detail, so the
+    # fail-closed guard had become a fail-always guard.
+    #
+    # A design that merely SPECIFIES the fibrin assay carefully is in scope.
+    ExtractionCase(
+        key="detailed_but_in_scope",
+        prose="""\
+Four groups of three in a single plate: unstimulated control, TGF-b1 at
+5 ng/mL, MSC-conditioned media at 50% v/v, and both together. Constructs are
+400 uL final volume with fibrinogen at 5 mg/mL, thrombin 0.5 U/mL, CaCl2
+2.5 mM, seeded at 1.0e6 cells/mL in 1% FBS assay medium with antibiotics.
+Treatments go on at 1 hour after casting. At 48 hours I remove 1.0 mL and
+replace it with fresh matched medium. Projected gel area is measured in square
+millimetres from individual well images on the fixed rig, each construct
+normalised to its own 1 hour area. Imaging at 1, 4, 8, 24, 48 and 72 hours,
+with 72 hours as the endpoint. Constructs not attached to both anchors, or with
+major casting bubbles, are excluded in advance. Analysis is a two-factor linear
+model on 72 hour percent contraction with planned contrasts.""",
+        expected={
+            "replicates_per_condition": 3,
+            "treatment_time_h": 1.0,
+            "endpoint_time_h": 72.0,
+            "imaging_times_h": [1.0, 4.0, 8.0, 24.0, 48.0, 72.0],
+            "antifibrinolytic": False,
+            "normalise_to_own_baseline": True,
+            "locked_imaging_protocol": True,
+            # The whole point of this case.
+            "__out_of_scope_nonempty__": False,
+        },
+        probes=("scope", "false_positive"),
+        note=(
+            "Dense protocol detail, all of it ordinary fibrin-assay specification. "
+            "Must be scoreable; anything in out_of_twin_scope here is a false "
+            "refusal that costs a paid agent run."
+        ),
+    ),
     # ----------------------------------------------------- units, aggressive
     ExtractionCase(
         key="everything_in_days",

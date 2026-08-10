@@ -29,6 +29,7 @@ thousands of papers" — is the §6 calibration almost verbatim.
 | `environment.py` — `RefuteEnv`, the benchmark as an environment | ✅ done (§9.4) |
 | `api.py` — `/score` · `/score/text` · `/run` · `/assays` | ✅ done (§9.4) |
 | `record.py` — serialise and replay an agent run | ✅ done — the demo no longer needs a network |
+| First recorded run — `cases/exp4/runs/gpt-5.5-high.json` | ✅ done, and it broke four things (§10). gpt-5.5 **declined to run the experiment**, correctly, and the scorer gave it 0% until fixed |
 | `extraction_cases.py` — 5 adversarial designs, known specs | ✅ done, and **5/5 pass live** |
 | `tests/` — 186 passing, 5 live-only skipped | ✅ done |
 | `cli.py` — `baseline` · `baselines` · `sweep` · `assays` · `calibrate` · `check-extraction` · `replay` · `providers` · `run` | ✅ done |
@@ -505,7 +506,7 @@ needing none of those should be finished before boarding.
 | 1 | Calibration harness — `evidence.py`, `sources.py`, `literature.py`, `refute calibrate` | ✅ done. Paperclip is now a credential away, not a build |
 | 2 | **Paperclip credential, and the six queries run once** | ⬜ **OWNER ACTION.** If `grep`/`map` behave unlike the docs, find out now, not on the 15th. `PaperclipSource.parse` is written against an unverified schema and is the first thing to suspect. This is what makes Track B a submission rather than a case study |
 | 3 | **Adversarial extraction set** — 5 designs, known specs | ✅ **done, 5/5 pass live** (`refute check-extraction`). Probes units, negation, distractor reagents, implicit knowledge, and out-of-scope recording. Extraction is no longer a possible explanation for any number here |
-| 4 | **Pre-record an agent run** | 🟡 **infrastructure done** — `refute run --record` serialises, `refute replay` re-scores against the current twin. Needs one paid run to produce the file. Cost of it staying open: the first live result's `~57 wells/arm` is now unrecomputable (§9.5) |
+| 4 | **Pre-record an agent run** | ✅ **done** — `cases/exp4/runs/gpt-5.5-high.json`, committed and replayable with no network. Took three attempts and broke four things; see §10. The recording is now a test fixture |
 | 5 | Decide the patent question | ⬜ **OWNER ACTION.** Presentation is disclosure; UK/EPO have no grace period. This already caught `versionCTRL` |
 | 6 | Baselines, so a score has a scale | ✅ done. `refute baselines` — and `EXPERT` at 9% is now the cleanest statement of the finding, with no model in the loop (§9.6) |
 
@@ -936,3 +937,144 @@ Three consequences:
 exactly one plate, `CEILING` must not, `NAIVE` must be worse on every axis the
 twin can see. A baseline set that silently drifted would make every comparison
 against it meaningless without any test failing.
+
+---
+
+## 10. The first recorded run — and the four things it broke
+
+2026-08-10. `refute run --agent openai:gpt-5.5 --agent-effort high --record`.
+Three attempts were needed; two of the failures were mine. Recorded in full
+because the run is now a committed fixture
+(`cases/exp4/runs/gpt-5.5-high.json`) and because §10.3 changes what this
+project claims.
+
+### 10.1 Attempt 1 — the fail-closed guard was a fail-always guard
+
+Refused a score. The extractor had listed seven items in `out_of_twin_scope`,
+including *"primary human synovial fibroblasts seeded in anchored fibrin
+constructs"* and *"projected gel area measured in mm²"* — **the twin's own assay
+and the twin's own readout.** Also the formulation, the media, the medium change,
+the analysis plan and the exclusion criteria.
+
+It did exactly what §9.2's field description said: *"anything the fields above
+cannot represent."* Every real design carries protocol detail no schema has a slot
+for, so the guard fired on everything.
+
+The field is now scoped to **substitutions that change the apparatus being
+simulated** — a non-fibrin matrix, a readout that is not gel area, a different
+vessel, an agent that alters degradation without being an antifibrinolytic — with
+an explicit negative list and the line *a design that merely specifies the fibrin
+assay in detail belongs here NOT AT ALL.*
+
+**The lesson, and it is not a small one.** §9.2 had a true-positive test (collagen
+is refused) and no false-positive test. With one side pinned, *refuse everything*
+passes the suite — maximally safe, completely useless. A fail-closed guard needs
+both sides or it is not tested. The regression case (`detailed_but_in_scope`) uses
+the real prose that broke it.
+
+Only findable by running a real model: every hand-written fixture was terse, and
+nothing resembled the dense prose gpt-5.5 produces at high reasoning effort. The
+fixtures were testing a distribution the system never sees.
+
+### 10.2 Attempt 2 — the guard was right and the brief was wrong
+
+Refused again, but with **one** item, not seven: *"gel width narrowing instead of
+gel area."* A genuine readout substitution — the twin's measurement model is
+calibrated for area segmentation specifically (±2–3 fill-points on `fill_pct`),
+and it cannot simulate a width readout.
+
+So the refusal was correct and the **brief** was at fault. It constrained the
+plate count and the camera but never said what the apparatus *quantifies*, so the
+design was rejected for using the equipment differently than the twin assumes.
+That measures conformance to an unstated convention, not design quality.
+
+One line added to `AVAILABLE`: projected gel area as a percentage of well area,
+the only quantity the setup measures. **This leaks nothing** — it is the standard
+readout of the Roberts 2022 model and a property of the equipment, in the same
+class as "ONE 12-well plate". Neither defect the agent must rediscover is hinted
+at by naming the units.
+
+`EXPERIMENT_4_BRIEF` had **no test at all**, which is alarming for the single
+assumption the whole benchmark rests on. It is now pinned both ways: it must name
+the readout and the plate limit, and must not contain `fibrinolysis`,
+`aprotinin`, `tranexamic`, `plasmin`, `lysis`, `dissolv`, `half-time` or `5.8`.
+
+### 10.3 Attempt 3 — the agent declined, and the scorer punished it
+
+Round 1 scored, and did something neither Experiment 4 nor `EXPERT` did:
+
+| | power | testable | lysed | n/arm |
+|---|---|---|---|---|
+| as-run | 0% | 0% | 50% | unestimable |
+| `EXPERT` (hand-written, full hindsight) | 9% | 98% | 0% | ~29 |
+| **gpt-5.5 round 1** | **2%** | 58% | **1%** | ~50 |
+
+It drove lysis to **1% with no antifibrinolytic at all**, by treating at 1 h and
+ending at 72 h — finishing before the fibrinolysis window opens (Weibull scale
+183.7 h) rather than spending a reagent to survive to 168 h. A strategy neither
+baseline used, and a *cleaner* isolation of the second defect than my own
+`EXPERT`: with scaffold loss gone, 2% power is measurement precision alone.
+
+It also found a better normalisation than Experiment 4 used. Baselining at 1 h,
+when the gel is still near-full, gives a within-arm ratio SD of **~0.03** against
+`EXPERT`'s ~0.19 — a large denominator dilutes the measurement noise. The effect
+gap in those units shrinks too, so it still needs tens of wells, but the design is
+genuinely more precise per well.
+
+**Then round 2 declined to run the experiment:**
+
+> *"No-go for the biological question. There is no one-12-well-plate design that
+> will actually answer whether MSC-conditioned medium suppresses TGF-β1-driven
+> contraction... Total required scale: approximately 130–140 cast wells, not 12."*
+
+That is **this project's own headline finding, reached independently** — and
+`score.py`'s own diagnosis text already said *"to report that the question cannot
+be answered at this scale — the last is a legitimate answer, not a failure."*
+
+**The scorer gave it 0% power.** The worst score available. The extraction was
+correct (`conditions: []` faithfully records "no plate should be cast"); the
+scorer was wrong. It was penalising, maximally, the exact epistemic behaviour the
+benchmark exists to reward — and simulating an empty plate to do it.
+
+Fixed: `DesignSpec.assigns_wells`, `DesignScore.declined`, `feasibility ==
+"declined"`, nothing simulated, and a `summary()` that refuses to print power at
+all rather than showing a placeholder that reads as data. `feedback_for_agent`
+no longer tells a correct refusal that it recovered 0% of runs — which would push
+the agent to propose a plate it had just correctly argued cannot work. The CLI
+and `replay` print an OUTCOME block instead of a `2% -> 0%` delta, because those
+rounds are not on the same scale.
+
+**What is deliberately NOT resolved.** A declined design still carries reward
+`0.0` in `RefuteEnv`, flagged by `info["declined"]`. What a correct refusal is
+worth against a 9% plate is a research question, not a coding one, and inventing a
+number would be exactly the kind of invented ground truth this project objects to.
+So it is reported and left open — **and a caller optimising on reward alone will
+penalise correct refusals.** That is stated in the code, not buried here.
+
+### 10.4 What this does to the pitch
+
+Stronger, and different from what §0 records.
+
+The old story was *0% → 97% testable*. The new one is better:
+
+> A frontier model reproduced the experiment's defects, then — given consequences
+> rather than corrections — worked out a strategy neither the original researcher
+> nor I had used, got the scaffold failure to 1% without the reagent, and then
+> **refused to run the experiment**, correctly, for the same reason the simulator
+> gives. My own benchmark scored that refusal zero until I fixed it.
+
+That last clause is the most credible thing in the project. The demo should show
+it: `refute replay` prints the OUTCOME block, and `refute baselines` establishes
+that declining was right.
+
+### 10.5 One number not to quote precisely
+
+`replicates_needed` for a design far from powered is **order-of-magnitude only**.
+For the agent's round 1 it ranges **28–79** across seeds and simulation counts and
+does not converge at `n_sims=1600`, while `power` (2%) and `testable_rate` (~60%)
+are stable to a point or two. It scales as (SD/gap)², so a 20% error in the gap
+becomes 44% in the requirement.
+
+Not a defect — the informative content is *tens of wells, not three* — but say
+"tens of wells" or "~50", never "49". Pinned by a test so it is not mistaken for
+precision later.

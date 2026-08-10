@@ -82,12 +82,21 @@ class DesignSpec(BaseModel):
     out_of_twin_scope: list[str] = Field(
         default_factory=list,
         description=(
-            "Anything the design specifies that the fields above cannot "
-            "represent: a different matrix material, a change to cell seeding "
-            "density, an intervention that is not an antifibrinolytic, a "
-            "readout other than gel area. Record it verbatim and briefly. Do "
-            "NOT silently omit it - a design scored as though it had never "
-            "said this is not the design that was proposed."
+            "ONLY substitutions that change the apparatus being simulated. The "
+            "simulator models an anchored FIBRIN gel, contracted by fibroblasts, "
+            "measured as GEL AREA from images, failing by FIBRINOLYSIS.\n"
+            "Record here only: a different matrix material (collagen, PEG, "
+            "Matrigel); a readout that is not gel area (gene expression, "
+            "stiffness, immunostaining); a different vessel or anchoring scheme; "
+            "or an added intervention that changes scaffold degradation and is "
+            "not an antifibrinolytic.\n"
+            "Leave this EMPTY for ordinary protocol detail, which the simulator "
+            "does not need and which is not a deviation: gel formulation and "
+            "concentrations, cell seeding density, media composition, serum, "
+            "antibiotics, growth factor doses, medium changes, the units the "
+            "area is reported in, the statistical analysis plan, and "
+            "well-exclusion or QC criteria. A design that merely SPECIFIES the "
+            "fibrin assay in detail belongs here NOT AT ALL."
         ),
     )
     rationale: str = Field(
@@ -100,6 +109,17 @@ class DesignSpec(BaseModel):
 
     def fits_plate(self, plate_wells: int) -> bool:
         return self.total_wells <= plate_wells
+
+    @property
+    def assigns_wells(self) -> bool:
+        """False when the design declines to run the experiment at all.
+
+        Not a malformed spec. An agent told that the apparatus cannot resolve the
+        effect may answer that no plate should be cast - which is the verdict this
+        project itself reports, so the scorer must be able to tell it apart from a
+        design that simply performs badly. See `score_design`.
+        """
+        return bool(self.conditions) and self.replicates_per_condition > 0
 
     def unmodelled(self) -> list[str]:
         """Scope violations worth refusing over, blanks discarded.

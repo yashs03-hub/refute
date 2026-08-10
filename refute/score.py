@@ -115,6 +115,12 @@ class DesignScore:
     def failed(self) -> bool:
         return self.power < 0.5
 
+    # True when the design declined to run the experiment. Kept separate from
+    # `power` because 0% power means "this plate would fail" and declining means
+    # "no plate at this scale would succeed" - opposite epistemic acts that would
+    # otherwise be recorded as the same number.
+    declined: bool = False
+
     @property
     def feasibility(self) -> str:
         """Three distinct states that `infeasible_as_scoped` alone conflates.
@@ -125,6 +131,8 @@ class DesignScore:
         whose data yield depends on an unmeasured constant is exactly the case
         worth flagging.
         """
+        if self.declined:
+            return "declined"
         if self.replicates_needed <= 0:
             return "unestimable"
         return "infeasible" if self.infeasible_as_scoped else "feasible"
@@ -151,6 +159,17 @@ class DesignScore:
         return self.replicates_needed > 0 and self.replicates_needed * arms > PLATE_WELLS
 
     def summary(self) -> str:
+        if self.declined:
+            return (
+                "DECLINED - this design assigns no wells.\n\n"
+                "It is not a failed design. It is the answer that no design at "
+                "this scale can\nresolve the effect, which is the same verdict "
+                "this benchmark reports. Nothing\nwas simulated, so there are no "
+                "power or testability numbers to report.\n\n"
+                "To judge it, ask whether declining was right: `refute baselines` "
+                "gives the\nceiling on one plate.\n\n"
+                + "\n".join(f"  - {d}" for d in self.diagnoses)
+            )
         lines = []
         if self.over_plate_capacity:
             lines.append(
@@ -214,6 +233,33 @@ def score_design(
     unmodelled = design.unmodelled()
     if unmodelled:
         raise OutOfTwinScopeError(unmodelled)
+
+    # A design that assigns no wells is declining to run the experiment, not
+    # failing at it. Found on 2026-08-10: gpt-5.5, told the apparatus could not
+    # resolve the effect, replied "no-go - there is no one-12-well-plate design
+    # that will answer this" and specified ~130-140 wells as what would. That is
+    # the verdict this project reports as its own headline, and the scorer gave it
+    # 0% power - the worst score available. Simulating an empty plate returns a
+    # confident number about an experiment nobody proposed.
+    if not design.assigns_wells:
+        return DesignScore(
+            power=0.0,
+            testable_rate=0.0,
+            mean_usable_wells=0.0,
+            mean_lysed_fraction=0.0,
+            over_plate_capacity=False,
+            identifies_contraction_kinetics=False,
+            n_conditions=len(design.conditions),
+            declined=True,
+            diagnoses=[
+                "this design declines to run the experiment - no wells are "
+                "assigned. That is not a 0% design; it is the claim that no "
+                "design at this scale would work. Judge it by whether declining "
+                "was correct: run `refute baselines` for the ceiling on one "
+                "plate. Power and testability below are placeholders, NOT "
+                "measurements - a declined design was never simulated."
+            ],
+        )
 
     twin = ExperimentTwin(params=params, seed=seed)
     plates = twin.simulate_many(design, n_sims)
@@ -435,6 +481,16 @@ def feedback_for_agent(score: DesignScore) -> str:
     was gone before the endpoint, never 'add aprotinin'. The agent has to work
     out the fix - that is the part being benchmarked.
     """
+    if score.declined:
+        # Nothing to feed back. Reporting "0% of runs recovered the effect" would
+        # tell the agent its refusal failed, pushing it to propose a plate it has
+        # just correctly argued cannot work.
+        return (
+            "Your response declined to run the experiment, so nothing was "
+            "simulated. That is a recognised answer here, not a failure. If you "
+            "stand by it, say so and stop; if you want to revise, propose a plate."
+        )
+
     head = (
         f"Your design was simulated {'many times' if score.power else 'many times'}. "
         f"It recovered the true treatment effect in {score.power:.0%} of runs."

@@ -121,6 +121,47 @@ def test_a_scripted_agent_can_be_driven_through_the_environment(monkeypatch):
     assert "aprotinin" not in agent.feedback_seen[0].lower()
 
 
+def test_the_brief_does_not_leak_the_answers():
+    """Pre-registration integrity - the property the whole benchmark rests on.
+
+    If the brief mentions fibrinolysis or an antifibrinolytic, the agent is being
+    told the answer and every score afterwards is meaningless. This had no test,
+    which is alarming for the single assumption everything else depends on.
+    """
+    from refute.agent import EXPERIMENT_4_BRIEF
+
+    lowered = EXPERIMENT_4_BRIEF.lower()
+    for leak in (
+        "fibrinolysis",
+        "fibrinolytic",
+        "aprotinin",
+        "tranexamic",
+        "aminocaproic",
+        "plasmin",
+        "dissolv",       # "the gels dissolve"
+        "lysis",
+        "half-time",
+        "5.8",           # the fitted contraction half-time
+    ):
+        assert leak not in lowered, f"the brief leaks '{leak}'"
+
+
+def test_the_brief_states_what_the_apparatus_can_measure():
+    """Added after two live runs were refused a score.
+
+    The brief constrained the plate count and the camera but not the readout, so
+    gpt-5.5 proposed neck-width narrowing - which the twin cannot simulate, its
+    measurement model being calibrated for area segmentation. Rejecting a design
+    for using the equipment differently than assumed measures conformance to an
+    unstated convention rather than design quality.
+    """
+    from refute.agent import EXPERIMENT_4_BRIEF
+
+    lowered = EXPERIMENT_4_BRIEF.lower()
+    assert "area" in lowered, "the brief must name the quantity that is measured"
+    assert "12-well" in lowered, "and the resource limit"
+
+
 def test_feedback_never_names_the_fix(monkeypatch):
     """The scaffold-failure diagnosis must describe what happened, not what to add."""
     from refute.score import feedback_for_agent, score_design

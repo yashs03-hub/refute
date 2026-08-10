@@ -182,6 +182,12 @@ class RefuteEnv:
             "over_plate_capacity": score.over_plate_capacity,
             "diagnoses": list(score.diagnoses),
             "verdict_sensitive_to_assumption": score.verdict_sensitive_to_assumption,
+            # A declined design carries reward 0.0 like a failed one, because
+            # there is no defensible number to give it: what a correct refusal is
+            # worth against a 9% plate is a research question, not a coding one.
+            # So it is FLAGGED rather than scored, and a caller optimising on
+            # reward alone will penalise correct refusals. Read this key.
+            "declined": score.declined,
             "terminated_reason": self._reason(score),
         }
         self.history.append(info)
