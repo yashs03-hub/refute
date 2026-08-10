@@ -38,8 +38,9 @@ runs/
 # reason recorded runs store prose and not scores.
 site/
 .playwright-mcp/
-*-site-*.png
-site-*.png
+# Screenshots taken to check the rendered pages. Kept out of the repo: they go
+# stale the moment a number changes, and the pages are regenerated anyway.
+*.png
 
 # --- os ---
 .DS_Store
