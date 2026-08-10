@@ -602,8 +602,9 @@ Asked directly — "who uses this?" — the answer is not "benchmark authors".
 
 > Anyone about to spend three months and a five-figure budget on a plate that
 > cannot answer their question. Experiment 4 cost a term of MPhil work to
-> discover something a simulator says in 40 milliseconds: **you needed twenty
-> wells per arm and you have three.**
+> discover something a simulator says in 40 milliseconds: **you needed thirty
+> wells per arm and you have three — and until you stop the gel dissolving, you
+> cannot even find that out.**
 
 The agentic-science framing is why it is a benchmark today — but the durable
 version is a pre-registration check, and that is what §3 item 3 (the optimizer,
@@ -849,8 +850,37 @@ where the naive estimate was being driven by its tail.
 
 **What moved.** Power, testability and lysis: **unchanged** — those come from
 per-plate t-tests, not the pooled spread. Required replication roughly halved:
-as-run **50 → 20**, expert **44 → 29**, ceiling **8272 → 32** (and 32 < 60, so
-the contradiction is gone). Every qualitative conclusion survives.
+expert **44 → 29**, ceiling **8272 → 32** (and 32 < 60, so the contradiction is
+gone). Every qualitative conclusion survives.
+
+**And then a second, worse defect underneath it.** Checking whether the fixed
+number was *stable* — rather than assuming a plausible figure was correct —
+showed it was not:
+
+```
+as_run    n_sims=100  reps= 75 | 130     (two seeds)
+          n_sims=400  reps= 20 |  12
+          n_sims=800  reps= 17 |  38     <- not converging
+expert    n_sims=800  reps= 29 |  33     <- stable
+```
+
+The effect gap is estimated from wells that **survived to the endpoint**, and
+fibrinolysis takes the most contractile wells first — so for a design losing half
+its wells, the survivors are systematically missing the largest effects. The
+estimate is survivorship-biased, and no amount of simulation fixes it because the
+bias is in the sample, not the noise.
+
+**That is this project's own thesis, pointed at its own scorer.** The response is
+the one `UncalibratedAssayError` already established: refuse the number.
+`MAX_LYSIS_FOR_EFFECT_ESTIMATE = 0.2` — above 20% loss, `replicates_needed` and
+`min_detectable_ratio_diff` return unestimable with a diagnosis explaining why,
+instead of a confident figure derived from survivors.
+
+Consequence for the pitch: **the as-run design's required replication is now
+`unestimable`, and the quotable number is `EXPERT`'s ~29** (stable within ±5).
+That is a better claim anyway — it says *even with the scaffold protected you
+needed ten times the wells you had*, which is the finding, rather than a figure
+computed from the wreckage.
 
 **Two lessons worth saying out loud.**
 
@@ -871,7 +901,7 @@ references now supply one, and none of them is model output.
 
 ```
   design  wells   power  testable   lysed  n/arm needed      verdict
-  as_run     12     0%        0%     50%            20   infeasible
+  as_run     12     0%        0%     50%             -  unestimable
    naive     12     0%        0%     50%             -  unestimable
   expert     12     9%       98%      0%            29   infeasible
  ceiling    120    83%      100%      0%            32   infeasible
@@ -894,9 +924,13 @@ Three consequences:
   design converged on the same shape as `EXPERT` — 2 arms, n=6, aprotinin, Day 7 —
   and landed at the same 9% power. *The agent matched a hand-written expert
   design*, which is a stronger and more specific claim than the delta.
-- **`NAIVE` is `unestimable`, not merely bad.** It yields so little that the twin
-  cannot even say what it would need. That is a distinct verdict from
-  `infeasible`, and it is why `feasibility` had to become tri-state (§9.4).
+- **`AS_RUN` and `NAIVE` are `unestimable`, not merely bad.** Both lose half their
+  wells, so the twin refuses to say what they would need — the surviving sample is
+  biased against the effect (§9.5). That is a distinct verdict from `infeasible`,
+  and it is why `feasibility` had to become tri-state (§9.4). It also means the
+  right sequencing advice falls out of the scorer rather than being asserted:
+  *fix the scaffold loss first; the replication requirement is only answerable
+  once wells survive.*
 
 `sanity_check()` guards the properties the set exists to have — `EXPERT` fits
 exactly one plate, `CEILING` must not, `NAIVE` must be worse on every axis the

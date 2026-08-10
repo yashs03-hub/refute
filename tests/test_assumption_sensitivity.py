@@ -69,10 +69,26 @@ def test_the_summary_warns_before_showing_the_number():
 
 
 def test_the_flag_does_not_fire_for_a_verdict_that_holds():
-    """It must discriminate, not fire on everything that uses aprotinin."""
-    # A Day-7 endpoint sits inside the observed window, so the conclusion
-    # (underpowered, and infeasible on one plate) holds at either extreme.
-    score = score_design(_design(antifibrinolytic=True, endpoint=168.0), n_sims=300)
+    """It must discriminate, not fire on everything that uses aprotinin.
+
+    An endpoint at 120 h sits well inside the observed survival window, so the
+    scaffold holds whether or not aprotinin does anything - and the conclusion
+    (underpowered, infeasible on one plate) is the same at both extremes.
+    Endpoints past ~144 h do flip, which is the case the test above covers.
+    """
+    early = DesignSpec(
+        conditions=["N-T", "N-CM+T"],
+        replicates_per_condition=6,
+        imaging_times_h=[2, 6, 12, 24, 72, 120],
+        treatment_time_h=72.0,
+        endpoint_time_h=120.0,
+        antifibrinolytic=True,
+        antifibrinolytic_agent="aprotinin 200 KIU/mL",
+        normalise_to_own_baseline=True,
+        locked_imaging_protocol=True,
+        anticipates_scaffold_failure=True,
+    )
+    score = score_design(early, n_sims=300)
     assert score.assumptions_in_play == ["aprotinin_hazard_scale"]
     assert score.verdict_sensitive_to_assumption is False
 
@@ -91,8 +107,19 @@ def test_feasibility_separates_unestimable_from_feasible():
     assert score.infeasible_as_scoped is False
     assert score.feasibility == "unestimable", "not the same as 'fits on a plate'"
 
+    # EXPERT protects the scaffold, so its requirement IS estimable - and needing
+    # 2 x ~30 wells on a 12-well plate is 'infeasible', a different verdict.
+    from refute.baselines import EXPERT
+
+    expert = score_design(EXPERT, n_sims=300)
+    assert expert.mean_lysed_fraction < 0.05
+    assert expert.feasibility == "infeasible"
+
+    # Experiment 4 as run loses half its wells, so it is 'unestimable': the
+    # surviving sample cannot support an effect-size estimate at all.
     as_run = score_design(EXPERIMENT_4_AS_RUN, n_sims=200)
-    assert as_run.feasibility == "infeasible"
+    assert as_run.mean_lysed_fraction > 0.3
+    assert as_run.feasibility == "unestimable"
 
 
 def test_check_assumptions_false_skips_the_extra_work():

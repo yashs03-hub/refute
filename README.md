@@ -71,33 +71,49 @@ one still fails:
 1. **The scaffold dissolved.** No antifibrinolytic, and fibrinolysis runs
    fastest in the most contractile arm — so the TGF-β arms failed first, which
    are exactly the arms the comparison needed.
-2. **It was ~7× underpowered anyway.** At ±2–3 fill-points of quantification
-   noise, resolving the effect needs ~20 wells per arm. The experiment ran 3.
+2. **It was ~10× underpowered anyway.** At ±2–3 fill-points of quantification
+   noise, resolving the effect needs **~29 wells per arm**. The experiment ran 3.
    *Measurement precision, not biology, is the binding constraint* — and this
    holds even if every gel survives.
 
 The second finding was not designed in. The twin produced it, and it
 contradicted the test expectation originally written for it.
 
-> **Number corrected 2026-08-10.** This read *~50 wells per arm, ~17×* until a
-> non-robust variance estimator was found in `_pooled_spread`: a per-well ratio
-> has a heavy right tail, and `np.var` let single division artifacts inflate the
-> assay's precision floor. Both are now estimated robustly. Power, testability
-> and lysis were unaffected — only the required-replication estimate, which was
-> roughly doubled. The conclusion is unchanged and the direction of the error was
-> conservative.
+> **Corrected 2026-08-10, twice.** This read *~50 wells per arm, ~17×*. Two
+> defects were found in how that figure was computed, both surfaced by scoring
+> the reference designs below.
+>
+> First, `_pooled_spread` used `np.var` on a *quotient*, which has a heavy right
+> tail — single division artifacts were inflating the assay's precision floor
+> (0.21 → 4.61 on a large design). Spread and centre are now estimated robustly.
+>
+> Second, and more interesting: the effect gap was being estimated from wells
+> that **survived to the endpoint**, and fibrinolysis takes the most contractile
+> wells first. For Experiment 4 as run — 50% of wells lost — that estimate ranged
+> **12 to 130** across seeds and did not converge. The scorer now **refuses** the
+> number above 20% loss rather than reporting a survivorship-biased figure, which
+> is why the as-run row reads `unestimable`. The quoted ~29 comes from `expert`,
+> which protects the scaffold and is stable within ±5.
+>
+> Power, testability and lysis were unaffected throughout — they come from
+> per-plate tests, not the pooled spread. Every qualitative conclusion is
+> unchanged.
 
 ### Is it just this agent, or the apparatus?
 
 `refute baselines` scores four hand-written references so an agent's number has
 a scale:
 
-| design | power | testable | wells/arm needed |
-|---|---|---|---|
-| as-run | 0% | 0% | 20 |
-| naive | 0% | 0% | — |
-| **expert** — best plate available, full hindsight | **9%** | 98% | **29** |
-| ceiling — same design, plate limit lifted | 83% | 100% | 32 |
+| design | power | testable | lysed | wells/arm needed |
+|---|---|---|---|---|
+| as-run | 0% | 0% | 50% | *unestimable* |
+| naive | 0% | 0% | 50% | *unestimable* |
+| **expert** — best plate available, full hindsight | **9%** | 98% | 0% | **29** |
+| ceiling — same design, plate limit lifted | 83% | 100% | 0% | 32 |
+
+`unestimable` is a third verdict, not a missing value: those designs lose half
+their wells, so the surviving sample cannot support an effect-size estimate at
+all. Fix the scaffold loss before asking how many wells you need.
 
 `expert` is written knowing everything Experiment 4 taught: narrow to the
 headline contrast, spend all 12 wells on it, aprotinin in the mix, endpoint

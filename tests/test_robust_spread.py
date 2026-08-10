@@ -92,6 +92,50 @@ def test_the_floor_is_physical_not_a_noise_multiple():
     assert MIN_MEASURABLE_FILL_PCT < PLATEAU_FILL_PCT / 5
 
 
+def test_a_high_loss_design_refuses_to_estimate_replication():
+    """The survivorship guard.
+
+    The effect gap is estimated from wells that survived, and fibrinolysis takes
+    the most contractile wells first - so for a design losing half its wells the
+    survivors are systematically missing the largest effects. The estimate ranged
+    12 to 130 across seeds for Experiment 4 as run and did not converge at
+    n_sims=800. Refusing it is the same move as `UncalibratedAssayError`.
+    """
+    from refute.baselines import AS_RUN
+    from refute.score import MAX_LYSIS_FOR_EFFECT_ESTIMATE
+
+    score = score_design(AS_RUN, n_sims=300)
+    assert score.mean_lysed_fraction > MAX_LYSIS_FOR_EFFECT_ESTIMATE
+    assert score.replicates_needed == -1
+    assert np.isnan(score.min_detectable_ratio_diff)
+    assert score.feasibility == "unestimable"
+    # It must say why, and point at the right fix order.
+    assert any("surviving sample is biased" in d for d in score.diagnoses)
+
+
+def test_the_refusal_is_stable_where_the_estimate_was_not():
+    """Across seeds and simulation counts: refused every time, rather than
+    returning a different plausible number each time."""
+    from refute.baselines import AS_RUN
+
+    for n_sims in (100, 400):
+        for seed in (0, 1, 2):
+            s = score_design(AS_RUN, n_sims=n_sims, seed=seed)
+            assert s.replicates_needed == -1, f"n_sims={n_sims} seed={seed}"
+
+
+def test_a_protected_design_is_estimable_and_stable():
+    """The guard must not refuse everything - a scaffold-protecting design has a
+    requirement that IS estimable, and it must be reproducible."""
+    values = [
+        score_design(EXPERT, n_sims=n, seed=s).replicates_needed
+        for n in (200, 400, 800)
+        for s in (0, 1)
+    ]
+    assert all(v > 0 for v in values), values
+    assert max(values) - min(values) <= 10, f"unstable across seeds/sims: {values}"
+
+
 def test_the_guard_discards_almost_nothing():
     """If the floor were removing a meaningful share of wells it would be a
     selection effect rather than an artifact filter."""

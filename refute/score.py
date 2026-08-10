@@ -31,6 +31,14 @@ MIN_WELLS_PER_ARM = 2          # below this, no test is possible
 HEADLINE_CONTRAST = ("N-T", "N-CM+T")
 Z_80_POWER = 2.8               # z(1-a/2) + z(power) for a=0.05, power=0.80
 
+# Above this fraction of wells lost, the effect gap can no longer be estimated:
+# the survivors are a biased sample of their own arm. 20% rather than a round
+# half because the loss is not random - it is concentrated in the most
+# contractile wells, so a modest overall rate already removes a large share of
+# the signal. Empirically, designs below this bound give a stable requirement
+# (+/-4 wells per arm across seeds); Experiment 4 as run, at 50%, ranged 12-130.
+MAX_LYSIS_FOR_EFFECT_ESTIMATE = 0.2
+
 
 # A per-well endpoint ratio is a quotient, so its distribution has a heavy right
 # tail: a baseline that happens to be measured small inflates the ratio without
@@ -236,6 +244,30 @@ def score_design(
             )
 
     diagnoses: list[str] = []
+
+    # The effect gap is estimated from wells that SURVIVED to the endpoint. When
+    # a design loses a large share of them, the survivors are not a
+    # representative sample of their arm - fibrinolysis takes the most
+    # contractile wells first, so exactly the wells carrying the largest effect
+    # are the ones missing. The estimate is then survivorship-biased, and
+    # measurably unstable: for Experiment 4 as run (50% lost) it ranged 12 to 130
+    # wells per arm across seeds and simulation counts, and did not converge at
+    # n_sims=800. Designs that protect the scaffold sit inside +/-4.
+    #
+    # Refusing the number is the same move as `UncalibratedAssayError`: this is
+    # the project's own survivorship argument applied to its own scorer, and a
+    # confident figure derived from survivors would be exactly the error it
+    # criticises elsewhere.
+    if reps_needed > 0 and mean_lysed > MAX_LYSIS_FOR_EFFECT_ESTIMATE:
+        diagnoses.append(
+            f"cannot estimate the replication this effect needs: {mean_lysed:.0%} "
+            f"of wells were lost before the endpoint, and fibrinolysis takes the "
+            f"most contractile wells first - so the surviving sample is biased "
+            f"against the very effect being measured. Fix the scaffold loss "
+            f"first; the requirement is only estimable once wells survive."
+        )
+        reps_needed = -1
+        mde = float("nan")
 
     if reps_needed > design.replicates_per_condition > 0 and reps_needed > 0:
         diagnoses.append(
