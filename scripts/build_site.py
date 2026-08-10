@@ -343,6 +343,9 @@ variability:</p>
 computed from a guessed SD looks like a calculation and is not one. And it says
 nothing about whether the preparation survives to be measured &mdash; that needs a
 tier&nbsp;1 twin, which needs somebody's raw data on how the assay breaks.</p>
+<p><a href="/tier0"><span class="k">Try it on your own experiment &rarr;</span></a>
+Runs entirely in the page: no account, no key, and nothing you type is sent
+anywhere.</p>
 
 <h2>Honest limits</h2>
 <p>Calibrated on <span class="k">one plate</span>, n=10 evaluable wells, one cell

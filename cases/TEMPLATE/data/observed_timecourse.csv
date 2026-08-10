@@ -1,0 +1,46 @@
+# TEMPLATE - one row per UNIT per TIMEPOINT. Copy this directory, rename it, fill
+# it in, delete these comment lines you do not need.
+#
+# "unit" is whatever you replicate: a well, an animal, a chip, a field of view.
+# One row even for timepoints where the measurement failed - a blank `value` with
+# a `state` of `unmeasurable` is DATA, and it is data nothing else records.
+#
+# Columns
+#   unit         your own label (A1, mouse-07, chip-3). Must be stable across rows.
+#   condition    the arm. Use the same string every time; the hazard model is
+#                fitted per condition, so a typo becomes a separate arm.
+#   hours        hours since the experiment started (not since treatment).
+#                Convert days: day 1 = 24, day 5 = 120, day 10 = 240.
+#   value        the readout, in your units. Blank if not measurable.
+#   state        one of: ok | failed | unmeasurable | excluded
+#                  ok           measured normally
+#                  failed       the preparation itself failed (lysed, delaminated,
+#                               ruptured, died) - THIS is the constant nobody
+#                               publishes, so record it even when `value` is blank
+#                  unmeasurable prep intact, measurement failed (bad image, lost
+#                               sample). Different from `failed` and must not be
+#                               merged with it: one is the assay breaking, the
+#                               other is you missing a reading
+#                  excluded     never entered the experiment properly (casting
+#                               failure, dosing failure, contamination)
+#   note         free text, optional. Why it failed, what it looked like.
+#
+# Two rows of the same unit at the same hour = a repeat measurement, and those
+# are disproportionately valuable: they separate systematic per-unit bias (which
+# cancels when you normalise a unit to itself) from per-reading noise (which does
+# not). Three or four repeats on any two units is enough.
+unit,condition,hours,value,state,note
+A1,control,6,,excluded,construct never formed
+B1,control,6,61.2,ok,
+B1,control,24,60.0,ok,
+B1,control,120,14.2,ok,
+B1,control,240,5.0,failed,collapsed onto pins
+A2,treated,6,58.9,ok,
+A2,treated,24,55.0,ok,
+A2,treated,120,9.5,ok,
+A2,treated,240,,failed,fully dissolved
+B2,treated,6,59.4,ok,
+B2,treated,24,55.0,ok,
+B2,treated,120,12.0,ok,
+B2,treated,168,,unmeasurable,glare on the frame
+B2,treated,240,,failed,fully dissolved
