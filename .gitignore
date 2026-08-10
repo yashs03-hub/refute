@@ -32,5 +32,14 @@ runs/
 # blanket ignore would drop it silently.
 .claude/worktrees/
 
+# --- generated site (rebuild with `python scripts/build_site.py`) ---
+# Not committed on purpose: every figure on the page is computed at build time,
+# so a checked-in copy could show numbers the code no longer produces - the same
+# reason recorded runs store prose and not scores.
+site/
+.playwright-mcp/
+*-site-*.png
+site-*.png
+
 # --- os ---
 .DS_Store

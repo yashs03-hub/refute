@@ -406,6 +406,37 @@ def cmd_replay(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tier0(args: argparse.Namespace) -> int:
+    """Power and scale for any assay, from the experimenter's own numbers."""
+    from .tier0 import TIER_LADDER, Tier0Design, Tier0InputError, score_tier0
+
+    if args.ladder:
+        _print("TIERS", TIER_LADDER)
+        return 0
+
+    design = Tier0Design(
+        assay=args.assay,
+        n_arms=args.arms,
+        replicates_per_arm=args.n,
+        capacity=args.capacity,
+        expected_effect=args.effect,
+        variability_sd=args.sd,
+        unit=args.unit,
+        alpha=args.alpha,
+        target_power=args.power,
+    )
+    try:
+        score = score_tier0(design)
+    except Tier0InputError as exc:
+        # Fail closed, and say what to do about it. The tier-0 analogue of
+        # UncalibratedAssayError: a power figure from a guessed variance looks
+        # like a calculation and is not one.
+        _print("CANNOT ASSESS", str(exc))
+        return 2
+    _print(f"TIER 0 - {design.assay}", score.summary())
+    return 0
+
+
 def cmd_harnesses(args: argparse.Namespace) -> int:
     """The harness is a variable, not a constant. Say what each one is."""
     from .harness import describe
@@ -585,6 +616,25 @@ def main(argv: list[str] | None = None) -> int:
         parents=[common],
         help="score the reference designs, so an agent's number has a scale",
     ).set_defaults(func=cmd_baselines)
+
+    p_t0 = sub.add_parser(
+        "tier0",
+        parents=[common],
+        help="power and scale for ANY assay, from your own effect size and SD",
+    )
+    p_t0.add_argument("--assay", default="unnamed assay")
+    p_t0.add_argument("--arms", type=int, default=2, help="number of arms")
+    p_t0.add_argument("--n", type=int, default=3, help="replicates per arm")
+    p_t0.add_argument("--capacity", type=int, default=12, help="units available")
+    p_t0.add_argument("--effect", type=float, help="difference you expect")
+    p_t0.add_argument("--sd", type=float, help="within-arm SD of that measurement")
+    p_t0.add_argument("--unit", default="well", help="well | animal | sample | field")
+    p_t0.add_argument("--alpha", type=float, default=0.05)
+    p_t0.add_argument("--power", type=float, default=0.80, help="target power")
+    p_t0.add_argument(
+        "--ladder", action="store_true", help="explain the tiers and stop"
+    )
+    p_t0.set_defaults(func=cmd_tier0)
 
     sub.add_parser(
         "harnesses",
