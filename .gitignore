@@ -42,5 +42,11 @@ site/
 # stale the moment a number changes, and the pages are regenerated anyway.
 *.png
 
+# --- agent tooling scratch ---
+# Local plugin state, not project configuration. Scoped by name rather than
+# ignoring all dotfiles, for the same reason .claude/worktrees/ is scoped: real
+# project config belongs in version control.
+.claude-flow/
+
 # --- os ---
 .DS_Store
