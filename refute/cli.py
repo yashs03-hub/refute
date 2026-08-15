@@ -114,6 +114,64 @@ def cmd_assays(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chat(args: argparse.Namespace) -> int:
+    """A conversation about a design, where every claim is computed."""
+    from .chat import Session
+
+    extractor = None
+    if not args.no_model:
+        from .agent import extract_design
+        from .providers import DEFAULT_EXTRACTOR, spec_from_string
+
+        spec = (
+            spec_from_string(args.extractor, "low")
+            if args.extractor
+            else DEFAULT_EXTRACTOR
+        )
+        extractor = lambda text: extract_design(text, extractor=spec)  # noqa: E731
+
+    session = Session(extractor=extractor, n_sims=args.sims)
+
+    print("=" * 68)
+    print("refute chat — describe your experiment; every answer is simulated")
+    print("=" * 68)
+    print(
+        "\nDescribe the arms, replicates, when you treat, when you measure and\n"
+        "the endpoint. Then ask: what should I change · what if I add aprotinin ·\n"
+        "why · how many wells do I need.   Ctrl-D to leave.\n"
+    )
+
+    if args.design:
+        session.design = DesignSpec.model_validate(json.loads(open(args.design).read()))
+        try:
+            session.score = score_design(session.design, n_sims=args.sims)
+        except OutOfTwinScopeError as exc:
+            _report_out_of_scope(exc)
+            return 2
+        print(session._verdict_sentence(session.score))
+        print("\n  computed from:")
+        from .chat import _cite
+
+        for line in _cite(session.score, args.sims):
+            print(f"    {line}")
+        print()
+
+    while True:
+        try:
+            text = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not text:
+            continue
+        if text in ("exit", "quit"):
+            return 0
+        turn = session.ask(text)
+        print()
+        print(turn.render())
+        print()
+
+
 def cmd_infer(args: argparse.Namespace) -> int:
     """Constants papers report without meaning to.
 
@@ -838,6 +896,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_assays.add_argument("--key", help="show one protocol in detail")
     p_assays.set_defaults(func=cmd_assays)
+
+    p_chat = sub.add_parser(
+        "chat",
+        parents=[common],
+        help="talk about a design; every answer is a simulation",
+    )
+    p_chat.add_argument("--design", help="start from a DesignSpec JSON file")
+    p_chat.add_argument("--extractor", help="override the extractor model")
+    p_chat.add_argument(
+        "--no-model",
+        action="store_true",
+        help="offline: needs --design, follow-ups still work",
+    )
+    p_chat.set_defaults(func=cmd_chat)
 
     p_inf = sub.add_parser(
         "infer",
