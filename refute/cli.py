@@ -114,6 +114,75 @@ def cmd_assays(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_infer(args: argparse.Namespace) -> int:
+    """Constants papers report without meaning to.
+
+    With --key, runs the search and then greps the result set for the SHAPE of
+    each unstated constant. That is the trick: you cannot search for a number
+    nobody wrote, but you can search for the pattern it hides in.
+    """
+    import subprocess
+
+    from .assays import REGISTRY
+    from .assays.inference import RULES, patterns_for, summary
+    from .assays.sources import PaperclipSource
+
+    if not args.key:
+        _print("INFERENCE RULES", summary())
+        return 0
+
+    protocol = REGISTRY.get(args.key)
+    if protocol is None:
+        _print("UNKNOWN", f"no protocol '{args.key}'. Try `refute assays`.")
+        return 2
+
+    src = PaperclipSource()
+    if reason := src.why_unavailable():
+        _print("UNAVAILABLE", reason)
+        return 2
+
+    query = protocol.paperclip_query or protocol.name
+    proc = subprocess.run(
+        src.command(query, limit=args.limit), capture_output=True, text=True, timeout=300
+    )
+    if proc.returncode != 0:
+        _print("SEARCH FAILED", proc.stderr.strip()[:400])
+        return 2
+    rid = src.result_id(proc.stdout)
+    if rid is None:
+        _print("SEARCH FAILED", "no result id in the output - contract changed")
+        return 2
+
+    lines = [f"protocol : {args.key}", f"query    : {query}", f"papers   : {rid}", ""]
+    for rule in RULES:
+        if args.rule and rule.key != args.rule:
+            continue
+        lines.append(f"── {rule.key} → {rule.recovers}")
+        hit_any = False
+        for pattern in patterns_for(rule.key):
+            g = subprocess.run(
+                src.grep_command(pattern, from_id=rid, context=args.context),
+                capture_output=True, text=True, timeout=300,
+            )
+            body = g.stdout.strip()
+            if g.returncode == 0 and body and "No matches" not in body:
+                hit_any = True
+                for ln in body.splitlines()[1 : args.show + 1]:
+                    lines.append(f"    {ln.strip()[:150]}")
+        if not hit_any:
+            lines.append("    (nothing matched - the shape is absent from these papers)")
+        lines.append("")
+
+    lines.append(
+        "These are CANDIDATES, not constants. Each match is a place a number may\n"
+        "be recoverable by arithmetic - somebody still has to read the paper and\n"
+        "confirm the reading. `refute infer` with no --key explains each rule and\n"
+        "what would make it wrong."
+    )
+    _print("INFERENCE", "\n".join(lines))
+    return 0
+
+
 def cmd_advise(args: argparse.Namespace) -> int:
     """What to change, with what each change would actually do."""
     from .advise import advise
@@ -769,6 +838,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_assays.add_argument("--key", help="show one protocol in detail")
     p_assays.set_defaults(func=cmd_assays)
+
+    p_inf = sub.add_parser(
+        "infer",
+        parents=[common],
+        help="constants papers report without meaning to",
+    )
+    p_inf.add_argument("--key", help="run the rules against a protocol's corpus")
+    p_inf.add_argument("--rule", help="only one rule")
+    p_inf.add_argument("--limit", type=int, default=12, help="papers to search")
+    p_inf.add_argument("--show", type=int, default=6, help="matches per pattern")
+    p_inf.add_argument("--context", type=int, default=0)
+    p_inf.set_defaults(func=cmd_infer)
 
     p_adv = sub.add_parser(
         "advise",
