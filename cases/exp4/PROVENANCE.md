@@ -15,10 +15,9 @@ file used to say:
   gel-area percentages. Nothing in a fill-percentage timecourse identifies a
   donor, and the REC approval governs *use* of the waste tissue, which already
   happened lawfully.
-- The remaining gate is **authorship and priority**, not consent. This is
-  supervised MPhil work; publishing the constants and the 6/6 vs 0/4 lysis
-  split is publishing the result, and the author is not the only stakeholder in
-  when that happens. Confirm with the PI.
+- ~~The remaining gate is **authorship and priority**~~ — **cleared by the owner
+  2026-08-15.** The data may be used and the results published. No open gate
+  remains on the measurements themselves.
 
 **The repository is nonetheless still private**, because making it public is a
 separate decision that has not been taken — it would release this plan, the
