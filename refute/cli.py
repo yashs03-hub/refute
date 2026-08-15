@@ -114,6 +114,34 @@ def cmd_assays(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_advise(args: argparse.Namespace) -> int:
+    """What to change, with what each change would actually do."""
+    from .advise import advise
+
+    design = EXPERIMENT_4_AS_RUN
+    if args.design:
+        design = DesignSpec.model_validate(json.loads(open(args.design).read()))
+
+    try:
+        result = advise(design, n_sims=args.sims)
+    except OutOfTwinScopeError as exc:
+        _report_out_of_scope(exc)
+        return 2
+
+    _print("ADVICE", result.summary())
+
+    if args.all:
+        rest = [s for s in result.suggestions if not s.helps]
+        if rest:
+            _print(
+                "CHANGES THAT DID NOT HELP",
+                "\n\n".join(s.line() for s in rest)
+                + "\n\nReported because a change that does nothing is worth "
+                "knowing about\nbefore you spend a plate on it.",
+            )
+    return 0
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     """Query a live corpus. The one path that actually hits the network.
 
@@ -741,6 +769,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_assays.add_argument("--key", help="show one protocol in detail")
     p_assays.set_defaults(func=cmd_assays)
+
+    p_adv = sub.add_parser(
+        "advise",
+        parents=[common],
+        help="what to change, and what each change would do",
+    )
+    p_adv.add_argument("--design", help="path to a DesignSpec JSON file")
+    p_adv.add_argument(
+        "--all", action="store_true", help="also list changes that did not help"
+    )
+    p_adv.set_defaults(func=cmd_advise)
 
     p_search = sub.add_parser(
         "search",
