@@ -188,7 +188,7 @@ Hand-write these and you can finish the gate today:
 | `all_blocked.json` | `REFUSE` |
 | `one_unsearched.json` | `NOT_READY` — **not** refuse |
 | `context_dependent.json` | `TIER1`, verdict flagged sensitive |
-| `unmodelled_mention.json` | `OUT_OF_SCOPE` |
+| `unmodelled_mention.json` | `TIER1` — **corrected.** An earlier draft of this table said `OUT_OF_SCOPE`, which contradicted §5: a mention from a resolver that never saw the design cannot put a design out of scope. Scope must come from the `DesignSpec`. Drive the `OUT_OF_SCOPE` case from `design.out_of_twin_scope` instead |
 | `canonical_in_scope.json` | `TIER1` — the false-positive guard |
 
 Every value in them can be `null` except where the route depends on it. That is

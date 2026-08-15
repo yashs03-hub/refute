@@ -1,0 +1,75 @@
+{
+  "_note": [
+    "Full coverage except that one requirement was never looked for.",
+    "Routes to: nothing. complete is False, so the gate must refuse to emit a",
+    "verdict at all. Emitting 'not answerable at this scale' here would be a",
+    "claim about the literature drawn from a search that never ran, and that",
+    "is the most damaging wrong output this system can produce.",
+    "The unsearched entry carries no queries_run on purpose: there is nothing",
+    "to record, which is exactly what distinguishes it from NOT_REPORTED."
+  ],
+  "assay_key": "fibrin_contracture",
+  "requirement_version": "825ff3a19ed5",
+  "resolutions": {
+    "plateau_fill_pct": {
+      "value": 13.8,
+      "units": "%",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "contraction_tau_h": {
+      "value": 8.37,
+      "units": "h",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "measurement_noise_pct": {
+      "value": 1.7,
+      "units": "fill-points",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "measurement_bias_pct": {
+      "value": 1.8,
+      "units": "fill-points",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "lysis_shape": {
+      "value": 4.108,
+      "units": "-",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "lysis_scale_contractile_h": {
+      "value": 183.7,
+      "units": "h",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "lysis_scale_quiescent_h": {
+      "value": null,
+      "reason": "not_yet_searched"
+    },
+    "aprotinin_hazard_scale": {
+      "value": 4.0,
+      "units": "x",
+      "provenance": "literature",
+      "source": "FIXTURE:synthetic-literature - stands for a paper reporting an antifibrinolytic hazard ratio. No such extraction exists.",
+      "quote": "FIXTURE - placeholder for the sentence a real extraction would carry."
+    },
+    "p_cast_failure": {
+      "value": 0.0833,
+      "units": "probability",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "p_contamination": {
+      "value": 0.0833,
+      "units": "probability",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    }
+  },
+  "unmodelled_mentions": []
+}
