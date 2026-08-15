@@ -20,8 +20,8 @@ failure on the day should be suspected here first.
 
 from __future__ import annotations
 
-import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -111,51 +111,133 @@ class PaperclipSource:
                 )
         return ""
 
-    def command(self, query: str, limit: int = 10) -> list[str]:
+    # Verified against the live CLI on 2026-08-15. Three things the original
+    # contract got wrong, all found in the first ten minutes of having a key:
+    #
+    #   1. `search` REQUIRES -s/--source and errors without it.
+    #   2. `--json` is accepted and silently IGNORED - the output is human text.
+    #   3. `map`, which the plan assumed would do the extraction, is gated to
+    #      GXL testers and returns an error on this account. `grep` is not, and
+    #      is the better tool anyway: a failure rate is easier to find by its
+    #      shape than by its topic.
+    DEFAULT_SOURCES = "pmc,biorxiv,medrxiv"
+
+    # `  1. Title` starts an entry; `PMC123 · PMC · 2024-01-01` identifies it.
+    _ENTRY_RE = re.compile(r"^\s{0,4}(\d+)\.\s+(.*)$")
+    _IDENT_RE = re.compile(r"^\s+(\S+)\s+·\s+(\S+)\s+·\s+(\d{4}-\d{2}-\d{2})\s*$")
+    _HEADER_RE = re.compile(r"^Found\s+(\d+)\s+paper", re.MULTILINE)
+
+    def command(self, query: str, limit: int = 10, sources: str | None = None) -> list[str]:
         """Built separately from execution so it can be tested without a key."""
-        return [self._binary, "search", query, "-n", str(limit), "--json"]
+        return [
+            self._binary, "search",
+            "-s", sources or self.DEFAULT_SOURCES,
+            query, "-n", str(limit),
+        ]
+
+    def grep_command(
+        self, pattern: str, from_id: str, context: int = 1, ignore_case: bool = True
+    ) -> list[str]:
+        """Regex across full texts, scoped to a saved result set.
+
+        This is where the failure constants actually are. `search` ranks whole
+        papers by topic; a mortality rate or a delamination percentage is a
+        SHAPE inside a methods section, and grep is the tool for a shape.
+        """
+        cmd = [self._binary, "grep", "--from", from_id, "-C", str(context)]
+        if ignore_case:
+            cmd.append("-i")
+        cmd.append(pattern)
+        return cmd
 
     def search(self, query: str, limit: int = 10) -> list[Hit]:
         if reason := self.why_unavailable():
             raise RuntimeError(f"paperclip unavailable: {reason}")
         proc = subprocess.run(
-            self.command(query, limit), capture_output=True, text=True, timeout=120
+            self.command(query, limit), capture_output=True, text=True, timeout=300
         )
         if proc.returncode != 0:
             raise RuntimeError(f"paperclip failed: {proc.stderr.strip()[:300]}")
         return self.parse(proc.stdout)
 
     @staticmethod
-    def parse(stdout: str) -> list[Hit]:
-        """Tolerant of shape, because the exact schema is unverified.
+    def result_id(stdout: str) -> str | None:
+        """The `[s_1a2b3c]` handle, needed to chain grep onto a search."""
+        m = re.search(r"\[(s_[0-9a-f]+)\]", stdout)
+        return m.group(1) if m else None
 
-        Accepts a bare list or a dict wrapping one under a plausible key, and
-        skips records it cannot read rather than failing the whole run - losing
-        one hit is recoverable, losing a batch mid-event is not.
+    @classmethod
+    def parse(cls, stdout: str) -> list[Hit]:
+        """Parse the CLI's human output. RAISES if it cannot.
+
+        Deliberately NOT tolerant. The previous version returned [] on anything
+        it could not read, which meant a changed output format was indistinguish-
+        able from "the literature contains nothing" - and "the literature
+        contains nothing" is this project's headline finding. A parser that can
+        silently manufacture that result is a parser that can invalidate the
+        whole claim. Zero hits must be something the CLI *said*, not something a
+        try/except produced.
         """
-        try:
-            data = json.loads(stdout)
-        except json.JSONDecodeError:
-            return []
-        if isinstance(data, dict):
-            for key in ("results", "hits", "documents", "data"):
-                if isinstance(data.get(key), list):
-                    data = data[key]
-                    break
-            else:
+        text = stdout.strip()
+        if not text:
+            raise ValueError("paperclip returned no output at all")
+
+        header = cls._HEADER_RE.search(text)
+        if header is None:
+            # Legitimate empty results, stated by the tool.
+            if "No matches" in text or "No papers" in text or "Found 0" in text:
                 return []
-        hits = []
-        for row in data:
-            if not isinstance(row, dict):
-                continue
-            hits.append(
-                Hit(
-                    source=str(row.get("doi") or row.get("id") or row.get("pmid") or ""),
-                    title=str(row.get("title", "")),
-                    snippet=str(
-                        row.get("snippet") or row.get("text") or row.get("abstract") or ""
-                    ),
+            raise ValueError(
+                "could not parse paperclip output - the CLI contract has "
+                f"changed. First 200 chars:\n{text[:200]}"
+            )
+
+        claimed = int(header.group(1))
+        hits: list[Hit] = []
+        pending: list[str] = []          # lines of the current entry
+
+        def flush() -> None:
+            if not pending:
+                return
+            ident, url, snippet, title_parts = "", "", "", []
+            for line in pending:
+                if m := cls._IDENT_RE.match(line):
+                    ident = m.group(1)
+                elif line.strip().startswith("http"):
+                    url = line.strip()
+                elif line.strip().startswith('"'):
+                    snippet = line.strip().strip('"')
+                elif not ident:
+                    # Everything before the identifier line is title or authors;
+                    # titles wrap across lines in this output, so keep them all
+                    # and drop the last (the author list).
+                    title_parts.append(line.strip())
+            if title_parts:
+                title_parts = title_parts[:-1] or title_parts
+            if ident or url:
+                hits.append(
+                    Hit(
+                        source=ident or url,
+                        title=" ".join(p for p in title_parts if p),
+                        snippet=snippet,
+                    )
                 )
+            pending.clear()
+
+        for line in text.splitlines():
+            if cls._ENTRY_RE.match(line) and not line.strip().startswith("http"):
+                flush()
+                pending.append(cls._ENTRY_RE.match(line).group(2))
+            elif pending:
+                if line.strip().startswith("[") or not line.strip():
+                    continue
+                pending.append(line)
+        flush()
+
+        if claimed and not hits:
+            raise ValueError(
+                f"paperclip said it found {claimed} papers but none could be "
+                "parsed - the output format has changed"
             )
         return hits
 

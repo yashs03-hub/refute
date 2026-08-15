@@ -79,6 +79,26 @@ class DesignSpec(BaseModel):
             "constructs detaching from anchors."
         )
     )
+    out_of_twin_scope: list[str] = Field(
+        default_factory=list,
+        description=(
+            "ONLY substitutions that change the apparatus being simulated. The "
+            "simulator models an anchored FIBRIN gel, contracted by fibroblasts, "
+            "measured as GEL AREA from images, failing by FIBRINOLYSIS.\n"
+            "Record here only: a different matrix material (collagen, PEG, "
+            "Matrigel); a readout that is not gel area (gene expression, "
+            "stiffness, immunostaining); a different vessel or anchoring scheme; "
+            "or an added intervention that changes scaffold degradation and is "
+            "not an antifibrinolytic.\n"
+            "Leave this EMPTY for ordinary protocol detail, which the simulator "
+            "does not need and which is not a deviation: gel formulation and "
+            "concentrations, cell seeding density, media composition, serum, "
+            "antibiotics, growth factor doses, medium changes, the units the "
+            "area is reported in, the statistical analysis plan, and "
+            "well-exclusion or QC criteria. A design that merely SPECIFIES the "
+            "fibrin assay in detail belongs here NOT AT ALL."
+        ),
+    )
     rationale: str = Field(
         default="", description="One or two sentences on why this design."
     )
@@ -89,6 +109,55 @@ class DesignSpec(BaseModel):
 
     def fits_plate(self, plate_wells: int) -> bool:
         return self.total_wells <= plate_wells
+
+    @property
+    def assigns_wells(self) -> bool:
+        """False when the design declines to run the experiment at all.
+
+        Not a malformed spec. An agent told that the apparatus cannot resolve the
+        effect may answer that no plate should be cast - which is the verdict this
+        project itself reports, so the scorer must be able to tell it apart from a
+        design that simply performs badly. See `score_design`.
+        """
+        return bool(self.conditions) and self.replicates_per_condition > 0
+
+    def unmodelled(self) -> list[str]:
+        """Scope violations worth refusing over, blanks discarded.
+
+        An extractor emitting a stray empty string must not block a design the
+        twin can handle perfectly well. That error would be conservative rather
+        than permissive, but a verifier that cries wolf gets switched off, so it
+        is still worth not making.
+        """
+        return [r for r in self.out_of_twin_scope if r and r.strip()]
+
+
+class OutOfTwinScopeError(RuntimeError):
+    """Raised when a design does something the twin cannot represent.
+
+    The twin models one apparatus: an anchored fibrin gel, imaged for area,
+    failing by fibrinolysis. A design that changes the matrix, the seeding
+    density, or the readout is not a worse design - it is a design about which
+    this twin has nothing to say.
+
+    Scoring it anyway is the dangerous case, and the reason this raises rather
+    than warns. The extractor is instructed not to improve a design, so an
+    unrepresentable feature would simply be dropped, and the twin would return a
+    confident number for a plate nobody proposed. That is an error in the
+    permissive direction - the one direction a verifier must not fail in.
+    """
+
+    def __init__(self, reasons: list[str]):
+        self.reasons = list(reasons)
+        detail = "\n".join(f"    - {r}" for r in self.reasons)
+        super().__init__(
+            "this design specifies something the twin does not model, so no "
+            "score would be about the design that was proposed:\n"
+            f"{detail}\n"
+            "  The twin covers: anchored fibrin gel, area readout, "
+            "fibrinolytic scaffold loss, imaging schedule, replication.\n"
+            "  This is a limit of the twin, not a defect in the design."
+        )
 
 
 # The design Experiment 4 actually used. The twin must reproduce its observed

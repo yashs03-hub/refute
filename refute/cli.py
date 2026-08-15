@@ -14,7 +14,7 @@ import argparse
 import json
 import sys
 
-from .design import EXPERIMENT_4_AS_RUN, DesignSpec
+from .design import EXPERIMENT_4_AS_RUN, DesignSpec, OutOfTwinScopeError
 from .score import feedback_for_agent, score_design
 
 
@@ -26,11 +26,31 @@ def _print(title: str, body: str) -> None:
     print()
 
 
+def _report_out_of_scope(exc: OutOfTwinScopeError) -> None:
+    """Report a design the twin cannot speak to, as a twin limit not a verdict.
+
+    Phrased carefully: the design is not being called bad. Saying "unscorable"
+    where the truth is "unmodelled" would teach exactly the wrong lesson, and
+    the whole point of raising here is to avoid a confident wrong number.
+    """
+    _print(
+        "NOT SCORED - outside the twin",
+        f"{exc}\n\n"
+        "Nothing is wrong with the design. The twin models one apparatus, and\n"
+        "this design leaves it. Scoring it anyway would report a number about a\n"
+        "different experiment - the permissive failure a verifier must not make.",
+    )
+
+
 def cmd_baseline(args: argparse.Namespace) -> int:
     design = EXPERIMENT_4_AS_RUN
     if args.design:
         design = DesignSpec.model_validate(json.loads(open(args.design).read()))
-    score = score_design(design, n_sims=args.sims)
+    try:
+        score = score_design(design, n_sims=args.sims)
+    except OutOfTwinScopeError as exc:
+        _report_out_of_scope(exc)
+        return 2
     _print(f"{design.total_wells}-well design, endpoint {design.endpoint_time_h:.0f} h",
            score.summary())
     return 0
@@ -94,6 +114,57 @@ def cmd_assays(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_search(args: argparse.Namespace) -> int:
+    """Query a live corpus. The one path that actually hits the network.
+
+    Separate from `calibrate` on purpose: calibrate reports what has been
+    recorded, this produces new evidence. Conflating them is how a replayed
+    result gets presented as a fresh one.
+    """
+    from .assays import REGISTRY
+    from .assays.sources import PaperclipSource
+
+    src = PaperclipSource()
+    if reason := src.why_unavailable():
+        _print("UNAVAILABLE", reason)
+        return 2
+
+    if args.key:
+        protocol = REGISTRY.get(args.key)
+        if protocol is None:
+            _print("UNKNOWN", f"no protocol '{args.key}'. Try `refute assays`.")
+            return 2
+        query = protocol.paperclip_query or protocol.name
+        header = f"{args.key}: {query}"
+    else:
+        query = args.query
+        header = query
+
+    try:
+        hits = src.search(query, limit=args.limit)
+    except (RuntimeError, ValueError) as exc:
+        # A contract break must be loud. Reporting zero hits here would read as
+        # "the literature is silent", which is the project's headline claim.
+        _print("SEARCH FAILED", f"{type(exc).__name__}: {exc}")
+        return 2
+
+    lines = [f"query : {header}", f"hits  : {len(hits)}", ""]
+    for h in hits:
+        lines.append(f"  {h.source}")
+        if h.title:
+            lines.append(f"    {h.title[:88]}")
+        if h.snippet:
+            lines.append(f"    \"{h.snippet[:150]}\"")
+        lines.append("")
+    lines.append(
+        "Hits are papers, NOT constants. A paper on the right topic is not\n"
+        "evidence a constant is reported in it - that still needs reading the\n"
+        "methods section. Use `paperclip grep --from <id>` for the sentence."
+    )
+    _print("SEARCH", "\n".join(lines))
+    return 0
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
     """Report what literature calibration recovered, and what it did not.
 
@@ -108,9 +179,26 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     from .assays.sources import get_source
 
     src = get_source(args.source)
-    lines = [f"source: {src.name}"]
-    if reason := src.why_unavailable():
-        lines.append(f"  unavailable: {reason}")
+
+    # The numbers below come from REPORTS in literature.py - the recorded
+    # PubMed attempt - whatever --source says. Selecting a live source does NOT
+    # currently regenerate them: nothing here calls src.search().
+    #
+    # Labelling them with the requested source would attribute a PubMed result
+    # to a corpus that never produced it, which is the invented-provenance
+    # failure this project exists to criticise. So the header states where the
+    # findings actually came from, and says plainly when the requested source
+    # was not used.
+    lines = ["findings from : recorded PubMed attempt (assays/literature.py)"]
+    if src.name != "recorded":
+        lines.append(f"requested source: {src.name}  -- NOT used to produce these")
+        if reason := src.why_unavailable():
+            lines.append(f"  unavailable: {reason}")
+        else:
+            lines.append(
+                "  available, but `calibrate` replays recorded findings; it does\n"
+                "  not yet re-run queries. Use `refute search` for live evidence."
+            )
     lines.append("")
 
     if args.key:
@@ -210,6 +298,229 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_baselines(args: argparse.Namespace) -> int:
+    """Score the reference designs, so an agent's number has a scale."""
+    from .baselines import BASELINES, CEILING, sanity_check
+
+    sanity_check()
+    CEILING_REPS = CEILING.replicates_per_condition
+
+    rows = []
+    for b in BASELINES:
+        s = score_design(b.design, n_sims=args.sims)
+        rows.append((b, s))
+
+    header = (
+        f"{'design':>8} {'wells':>6} {'power':>7} {'testable':>9} "
+        f"{'lysed':>7} {'n/arm needed':>13} {'verdict':>12}"
+    )
+    lines = [header]
+    for b, s in rows:
+        lines.append(
+            f"{b.key:>8} {b.design.total_wells:>6} {s.power:>6.0%} "
+            f"{s.testable_rate:>9.0%} {s.mean_lysed_fraction:>7.0%} "
+            f"{(s.replicates_needed if s.replicates_needed > 0 else '-'):>13} "
+            f"{s.feasibility:>12}"
+        )
+
+    expert = next(s for b, s in rows if b.key == "expert")
+    ceiling = next(s for b, s in rows if b.key == "ceiling")
+
+    lines += ["", "what each one is for:"]
+    lines += [f"  {b.key:<8} {b.question}" for b, _ in rows]
+
+    # The point of the table, stated rather than left for the reader to infer.
+    lines += ["", "reading:"]
+    if expert.power < 0.8:
+        lines.append(
+            f"  EXPERT spends the whole plate, protects the scaffold and samples "
+            f"the kinetics,\n  and still reaches only {expert.power:.0%} power. It "
+            f"was written with hindsight the\n  agent is denied, so the ceiling on "
+            f"one plate is a fact about the apparatus,\n  not a verdict on any "
+            f"agent."
+        )
+    else:
+        lines.append(
+            f"  EXPERT reaches {expert.power:.0%} power on one plate, so the "
+            "apparatus is sufficient\n  and a low agent score is the agent's."
+        )
+    lines.append(
+        f"  CEILING is the same design at n={CEILING_REPS}, over capacity by "
+        f"design: {ceiling.power:.0%} power.\n  The constraint is the plate, and "
+        "that is what it costs. The twin has no\n  between-plate calibration, so "
+        "read it as an optimistic bound."
+    )
+    lines.append(
+        "\n  Compare any agent against EXPERT, not against AS_RUN. Beating a "
+        "design that\n  scored zero is not evidence of anything."
+    )
+
+    _print("BASELINES", "\n".join(lines))
+    return 0
+
+
+def cmd_check_extraction(args: argparse.Namespace) -> int:
+    """Validate the extractor against designs whose specs are known.
+
+    Extraction sits directly upstream of every score, so a parsing failure is
+    indistinguishable from a design failure after the fact. This is the only
+    check that separates them, and it costs one cheap model call per case.
+    """
+    from .agent import extract_design
+    from .extraction_cases import CASES, check
+    from .providers import DEFAULT_EXTRACTOR, ledger_summary, spec_from_string
+
+    extractor = (
+        spec_from_string(args.extractor, "low") if args.extractor else DEFAULT_EXTRACTOR
+    )
+    print(f"extractor {extractor}\ncases     {len(CASES)}\n")
+
+    results = []
+    for case in CASES:
+        try:
+            spec = extract_design(case.prose, extractor=extractor)
+        except Exception as exc:
+            results.append((case, None, f"{type(exc).__name__}: {exc}"))
+            print(f"  {case.key:<24} ERROR  {type(exc).__name__}")
+            continue
+        result = check(case, spec)
+        results.append((case, result, None))
+        print(f"  {case.key:<24} {'ok' if result.passed else 'FAIL':<6} "
+              f"probes: {', '.join(case.probes)}")
+        for m in result.mismatches:
+            print(f"      - {m}")
+
+    ok = sum(1 for _, r, e in results if e is None and r and r.passed)
+    lines = [f"{ok}/{len(CASES)} cases extracted correctly", ""]
+    if ok == len(CASES):
+        lines.append(
+            "Extraction is not the explanation for any score in this repo. State "
+            "this\nalongside the headline number - it is the difference between a "
+            "result and\na number that might be a parsing bug."
+        )
+    else:
+        lines.append(
+            "Extraction is NOT clean. Until these pass, any score could be a "
+            "parsing\nfailure rather than a design failure, and the two are "
+            "indistinguishable\nafter the fact. Fix the prompt or narrow the "
+            "claim; do not quote the\nheadline number as though it were "
+            "validated."
+        )
+    _print("EXTRACTION CHECK", "\n".join(lines))
+    _print("TOKENS", ledger_summary())
+    return 0 if ok == len(CASES) else 1
+
+
+def cmd_replay(args: argparse.Namespace) -> int:
+    """Re-score a recorded agent run. No credential, no network."""
+    from .record import RecordedRun
+
+    run = RecordedRun.load(args.path)
+    header = (
+        f"agent     {run.agent}\n"
+        f"extractor {run.extractor}\n"
+        f"recorded  {run.recorded_at or 'unknown'}\n"
+        f"rounds    {len(run.rounds)}"
+    )
+    if run.notes:
+        header += f"\nnotes     {run.notes}"
+    _print("RECORDED RUN", header)
+
+    scores = []
+    for i, rnd in enumerate(run.rounds, start=1):
+        try:
+            score = score_design(rnd.extracted, n_sims=args.sims)
+        except OutOfTwinScopeError as exc:
+            _report_out_of_scope(exc)
+            return 2
+        scores.append(score)
+        label = "PROPOSED" if i == 1 else f"REVISED (round {i})"
+        if args.verbose:
+            _print(f"{label} - DESIGN TEXT", rnd.design_text)
+        _print(f"{label} - EXTRACTED", rnd.extracted.model_dump_json(indent=2))
+        _print(f"{label} - SIMULATED", score.summary())
+
+    recomputed = (
+        "Scores are recomputed against the current twin, not read back from the "
+        "file,\nso this reflects the calibration in force now."
+    )
+
+    if len(scores) >= 2:
+        first, last = scores[0], scores[-1]
+        if last.declined:
+            # "2% -> 0%" would read as a regression. What happened is the agent
+            # stopped and argued the question is unanswerable at this scale, which
+            # is not on the same scale as a power figure.
+            _print(
+                "OUTCOME",
+                "The final round DECLINED to run the experiment.\n\n"
+                f"Round 1: {first.power:.0%} power, {first.testable_rate:.0%} "
+                f"testable, ~{first.replicates_needed} wells per arm needed.\n"
+                "Final:   no plate at this scale can resolve the effect.\n\n"
+                "This is NOT a regression - the rounds are not comparable. Whether "
+                "declining\nwas correct is answered by `refute baselines`.\n\n"
+                + recomputed,
+            )
+        else:
+            _print(
+                "DELTA",
+                f"power      {first.power:.0%} -> {last.power:.0%}\n"
+                f"testable   {first.testable_rate:.0%} -> {last.testable_rate:.0%}\n"
+                f"lysed      {first.mean_lysed_fraction:.0%} -> "
+                f"{last.mean_lysed_fraction:.0%}\n"
+                f"n/arm needed {first.replicates_needed} -> "
+                f"{last.replicates_needed}\n\n" + recomputed,
+            )
+    return 0
+
+
+def cmd_tier0(args: argparse.Namespace) -> int:
+    """Power and scale for any assay, from the experimenter's own numbers."""
+    from .tier0 import TIER_LADDER, Tier0Design, Tier0InputError, score_tier0
+
+    if args.ladder:
+        _print("TIERS", TIER_LADDER)
+        return 0
+
+    design = Tier0Design(
+        assay=args.assay,
+        n_arms=args.arms,
+        replicates_per_arm=args.n,
+        capacity=args.capacity,
+        expected_effect=args.effect,
+        variability_sd=args.sd,
+        unit=args.unit,
+        alpha=args.alpha,
+        target_power=args.power,
+    )
+    try:
+        score = score_tier0(design)
+    except Tier0InputError as exc:
+        # Fail closed, and say what to do about it. The tier-0 analogue of
+        # UncalibratedAssayError: a power figure from a guessed variance looks
+        # like a calculation and is not one.
+        _print("CANNOT ASSESS", str(exc))
+        return 2
+    _print(f"TIER 0 - {design.assay}", score.summary())
+    return 0
+
+
+def cmd_harnesses(args: argparse.Namespace) -> int:
+    """The harness is a variable, not a constant. Say what each one is."""
+    from .harness import describe
+
+    _print("HARNESSES", describe())
+    return 0
+
+
+def _cmd_demo(args: argparse.Namespace) -> int:
+    # Imported lazily: `demo` imports this module back, to delegate to the same
+    # cmd_* functions the CLI exposes so the two cannot drift apart.
+    from .demo import cmd_demo
+
+    return cmd_demo(args)
+
+
 def cmd_providers(args: argparse.Namespace) -> int:
     """What can actually be called right now, and why not if it can't."""
     from .providers import DEFAULT_AGENT, DEFAULT_EXTRACTOR, available
@@ -232,22 +543,66 @@ def cmd_providers(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
     from .agent import EXPERIMENT_4_BRIEF, extract_design, propose_design, revise_design
     from .providers import DEFAULT_EXTRACTOR, ledger_summary, spec_from_string
+    from .record import RecordedRound, RecordedRun
+
+    from .harness import get_harness
 
     agent = spec_from_string(args.agent, args.agent_effort)
     extractor = (
         spec_from_string(args.extractor, "low") if args.extractor else DEFAULT_EXTRACTOR
     )
-    print(f"agent     {agent}\nextractor {extractor}  (held constant)\n")
+    try:
+        harness = get_harness(args.harness, agent)
+    except KeyError as exc:
+        print(exc, file=sys.stderr)
+        return 2
 
-    design_text = propose_design(agent=agent)
+    # The pair is the unit of measurement, so both are printed and both are
+    # recorded. A score attributed to a model alone cannot be interpreted.
+    print(
+        f"agent     {agent}\n"
+        f"harness   {harness.name}  ({harness.adds})\n"
+        f"extractor {extractor}  (held constant)\n"
+    )
+
+    # Recorded unconditionally. A paid run whose prose is not kept cannot be
+    # re-scored after a calibration change, which is how the first live result's
+    # headline number became unquotable rather than merely stale.
+    record = RecordedRun(
+        agent=str(agent),
+        extractor=str(extractor),
+        brief=EXPERIMENT_4_BRIEF,
+        harness=harness.name,
+        recorded_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    )
+
+    def save_record() -> None:
+        if not args.record:
+            return
+        path = record.save(args.record)
+        print(f"[recorded {len(record.rounds)} round(s) -> {path}]\n")
+
+    design_text = harness.propose(EXPERIMENT_4_BRIEF)
     _print("PROPOSED DESIGN", design_text)
 
     spec = extract_design(design_text, extractor=extractor)
     _print("EXTRACTED SPEC", spec.model_dump_json(indent=2))
+    record.rounds.append(RecordedRound(design_text=design_text, extracted=spec))
+    save_record()  # written before scoring, so a scorer crash cannot lose the run
 
-    score = score_design(spec, n_sims=args.sims)
+    try:
+        score = score_design(spec, n_sims=args.sims)
+    except OutOfTwinScopeError as exc:
+        # No revision turn: there is no consequence report to give, because the
+        # simulator never ran. Inventing feedback here would be the model
+        # judging the design, which is the thing this project exists to avoid.
+        _report_out_of_scope(exc)
+        _print("TOKENS", ledger_summary())
+        return 2
     _print("SIMULATED", score.summary())
 
     if args.no_revise:
@@ -255,14 +610,45 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 0
 
     feedback = feedback_for_agent(score)
-    revised_text = revise_design(EXPERIMENT_4_BRIEF, design_text, feedback, agent=agent)
+    record.rounds[-1].feedback_given = feedback
+    revised_text = harness.revise(EXPERIMENT_4_BRIEF, design_text, feedback)
     _print("REVISED DESIGN", revised_text)
 
     revised_spec = extract_design(revised_text, extractor=extractor)
     _print("EXTRACTED SPEC (revised)", revised_spec.model_dump_json(indent=2))
+    record.rounds.append(
+        RecordedRound(design_text=revised_text, extracted=revised_spec)
+    )
+    save_record()
 
-    revised_score = score_design(revised_spec, n_sims=args.sims)
+    try:
+        revised_score = score_design(revised_spec, n_sims=args.sims)
+    except OutOfTwinScopeError as exc:
+        # A common and interesting case: told the scaffold dissolved, an agent
+        # may reasonably switch matrix material. That is a good instinct and the
+        # twin still cannot score it, so the first-round score stands alone.
+        _report_out_of_scope(exc)
+        _print("TOKENS", ledger_summary())
+        return 2
     _print("SIMULATED (revised)", revised_score.summary())
+
+    if revised_score.declined:
+        # A delta table here would read as 2% -> 0%, i.e. the revision made
+        # things worse, when what happened is that the agent stopped and argued
+        # the question is unanswerable at this scale. Those are not comparable.
+        _print(
+            "OUTCOME",
+            "The revision DECLINED to run the experiment rather than proposing a "
+            "worse plate.\n\n"
+            f"Round 1 scored {score.power:.0%} power, {score.testable_rate:.0%} "
+            f"testable, needing ~{score.replicates_needed} wells per arm.\n"
+            "Round 2 concluded no plate at this scale can resolve the effect.\n\n"
+            "Do NOT read this as a regression - the two rounds are not on the same "
+            "scale.\nWhether declining was correct is answered by `refute "
+            "baselines`, which scores\nthe best design available on one plate.",
+        )
+        _print("TOKENS", ledger_summary())
+        return 0
 
     _print(
         "DELTA",
@@ -293,11 +679,78 @@ def main(argv: list[str] | None = None) -> int:
         "sweep", parents=[common], help="antifibrinolytic x replicates grid"
     ).set_defaults(func=cmd_sweep)
 
+    sub.add_parser(
+        "baselines",
+        parents=[common],
+        help="score the reference designs, so an agent's number has a scale",
+    ).set_defaults(func=cmd_baselines)
+
+    p_t0 = sub.add_parser(
+        "tier0",
+        parents=[common],
+        help="power and scale for ANY assay, from your own effect size and SD",
+    )
+    p_t0.add_argument("--assay", default="unnamed assay")
+    p_t0.add_argument("--arms", type=int, default=2, help="number of arms")
+    p_t0.add_argument("--n", type=int, default=3, help="replicates per arm")
+    p_t0.add_argument("--capacity", type=int, default=12, help="units available")
+    p_t0.add_argument("--effect", type=float, help="difference you expect")
+    p_t0.add_argument("--sd", type=float, help="within-arm SD of that measurement")
+    p_t0.add_argument("--unit", default="well", help="well | animal | sample | field")
+    p_t0.add_argument("--alpha", type=float, default=0.05)
+    p_t0.add_argument("--power", type=float, default=0.80, help="target power")
+    p_t0.add_argument(
+        "--ladder", action="store_true", help="explain the tiers and stop"
+    )
+    p_t0.set_defaults(func=cmd_tier0)
+
+    sub.add_parser(
+        "harnesses",
+        parents=[common],
+        help="what each harness adds, and why the pair is the unit",
+    ).set_defaults(func=cmd_harnesses)
+
+    p_demo = sub.add_parser(
+        "demo", parents=[common], help="the pitch, in order, with nothing to type"
+    )
+    p_demo.add_argument(
+        "--no-pause", action="store_true", help="do not wait between beats"
+    )
+    p_demo.add_argument("--beat", type=int, help="run a single beat")
+    p_demo.set_defaults(func=_cmd_demo)
+
+    p_check = sub.add_parser(
+        "check-extraction",
+        parents=[common],
+        help="validate the extractor against designs with known specs",
+    )
+    p_check.add_argument("--extractor", help="override the extractor model")
+    p_check.set_defaults(func=cmd_check_extraction)
+
+    p_replay = sub.add_parser(
+        "replay", parents=[common], help="re-score a recorded run (no API key needed)"
+    )
+    p_replay.add_argument("path", help="path to a recorded run JSON file")
+    p_replay.add_argument(
+        "--verbose", action="store_true", help="also print the agent's prose"
+    )
+    p_replay.set_defaults(func=cmd_replay)
+
     p_assays = sub.add_parser(
         "assays", parents=[common], help="list assay protocols and calibration status"
     )
     p_assays.add_argument("--key", help="show one protocol in detail")
     p_assays.set_defaults(func=cmd_assays)
+
+    p_search = sub.add_parser(
+        "search",
+        parents=[common],
+        help="query the live corpus (needs a Paperclip credential)",
+    )
+    p_search.add_argument("query", nargs="?", default="", help="free-text query")
+    p_search.add_argument("--key", help="use a protocol's own recorded query")
+    p_search.add_argument("--limit", type=int, default=8)
+    p_search.set_defaults(func=cmd_search)
 
     p_cal = sub.add_parser(
         "calibrate", parents=[common], help="what literature calibration recovered"
@@ -316,6 +769,16 @@ def main(argv: list[str] | None = None) -> int:
         "run", parents=[common], help="propose -> simulate -> revise (needs API key)"
     )
     p_run.add_argument("--no-revise", action="store_true")
+    p_run.add_argument(
+        "--harness",
+        default="single-shot",
+        help="scaffolding around the model: single-shot | self-critique | checklist",
+    )
+    p_run.add_argument(
+        "--record",
+        metavar="PATH",
+        help="save the run to JSON so it can be replayed and re-scored later",
+    )
     p_run.add_argument(
         "--agent",
         default="openai:gpt-5.5",

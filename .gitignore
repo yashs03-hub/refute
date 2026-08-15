@@ -16,12 +16,37 @@ dist/
 runs/
 *.out.json
 
+# ...except recorded agent runs, which are NOT regenerable. Re-running costs
+# money and a model does not repeat itself, so a recorded run is primary data
+# rather than output - and the demo replays it precisely so the result does not
+# depend on a network or a rate limit. It must be in version control.
+# Both lines are needed: git cannot re-include a file whose parent directory is
+# excluded, so the directory has to be un-ignored before its contents.
+!cases/**/runs/
+!cases/**/runs/**
+
 # --- git worktrees created inside the repo ---
 # Each holds a full copy of the tree, so committing one would nest the repo in
 # itself. Scoped to worktrees/ rather than all of .claude/ on purpose: project
 # Claude config (settings, agents, commands) belongs in version control, and a
 # blanket ignore would drop it silently.
 .claude/worktrees/
+
+# --- generated site (rebuild with `python scripts/build_site.py`) ---
+# Not committed on purpose: every figure on the page is computed at build time,
+# so a checked-in copy could show numbers the code no longer produces - the same
+# reason recorded runs store prose and not scores.
+site/
+.playwright-mcp/
+# Screenshots taken to check the rendered pages. Kept out of the repo: they go
+# stale the moment a number changes, and the pages are regenerated anyway.
+*.png
+
+# --- agent tooling scratch ---
+# Local plugin state, not project configuration. Scoped by name rather than
+# ignoring all dotfiles, for the same reason .claude/worktrees/ is scoped: real
+# project config belongs in version control.
+.claude-flow/
 
 # --- os ---
 .DS_Store
