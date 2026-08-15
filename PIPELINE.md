@@ -114,7 +114,7 @@ the finding that matters most.
     <path d="M 220 626 L 220 636" marker-end="url(#pl2)"/>
     <path d="M 620 673 L 890 673 L 890 286 L 480 286 L 480 274" marker-end="url(#pl2)"/>
   </g>
-  <text x="898" y="470" font-size="10" fill="#4a9eb5" transform="rotate(-90 898 470)">revision re-enters the resolve loop</text>
+  <text x="560" y="279" font-size="10" fill="#4a9eb5">revision re-enters the loop</text>
 </svg>
 
 ## What the drawing is asserting
