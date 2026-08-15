@@ -1377,3 +1377,133 @@ Not the fibrin physics. The **refusal gate**: `runnable()` splitting the registr
 so the catalogue can grow without the claims growing. Fifty scaffolds can be
 added and still only what is calibrated is asserted. That property is what makes
 this portable at all.
+
+## 13. Two APIs — Benchling and BenchFlow
+
+### 13.1 Benchling — the denominator
+
+The 36 constants `tier1.py` marks missing across its six scaffolds are not one
+kind of thing. They come in three shapes, and the distinction decides what any
+given source can supply:
+
+| Shape | Examples | Who can supply it |
+|---|---|---|
+| Effect size and variance | `baseline_*`, `*_fold_change`, `*_cv` | papers report these — Paperclip's job |
+| Phenotype-coupled hazards | `p_detach_baseline_per_h`, `detach_force_coupling`, `mortality_severity_coupling` | `NOT_REPORTED` |
+| Exogenous nuisance | `p_field_unusable`, `p_seeding_failure`, `p_contamination_10d`, `p_bubble_per_day` | never published; every lab knows them to two significant figures |
+
+Benchling is useless for the first group and is the only realistic source for
+the third. State the fit that precisely and do not inflate it:
+
+> **Benchling does not help with the constants papers report. It helps with the
+> ones papers omit — which are the ones this whole argument rests on.**
+
+The reason is structural, and it is the same reason §6.1 found 0/10 abstracts
+carrying a per-unit failure rate: papers are the *surviving subset* of
+experiments. The plate that delaminated on day 3 never became a figure. **The
+ELN sits upstream of the publication filter.** Every plate ever cast is in it,
+including the abandoned ones. That is the denominator, and no corpus can supply
+it at any size.
+
+**What the API actually returns.** Benchling's v2 REST API (tenant-scoped,
+Python `benchling-sdk`, App client-credentials or a per-user key) exposes
+roughly four things that matter here:
+
+- **Entries** — ELN pages: free prose plus tables. A failed run reads *"gel
+  detached overnight, discarded"*. Same extraction problem as a paper, minus the
+  survivorship filter.
+- **Assay Results** — schematised numeric rows against a result schema.
+  Per-well numbers, *if* the lab defined a schema.
+- **Containers / Plates** — registered inventory. Well-level identity, *if* the
+  lab registers plates.
+- **Warehouse** — a Postgres read replica, the only sane way to do this in
+  bulk. Paid add-on; assume it is not available.
+
+So the yield is bounded by how the lab uses the product, not by the API.
+Structured registry plus result schemas and the constants fall out as a
+`GROUP BY`. Notebook-only and you are back to LLM extraction — which is fine,
+because "the LLM extracts, the simulator judges" already holds, and a notebook
+sentence is an easier extraction target than a methods section.
+
+**Do not assume a tenant exists.** Benchling is enterprise-priced; UK academic
+groups more often run OneNote or paper. Whether the group has one, and whether
+the fibrin work is in it, is a five-minute question that gates everything below.
+
+**Governance, and the escape hatch already in the data model.** Colleagues'
+unpublished runs entering a shared benchmark is a priority-and-authorship
+conversation, not a donor-consent one — the IRAS covers the tissue and says
+nothing about this. But refute does not need anyone's notebook. It needs
+`p_detach_baseline_per_h`, which is a scalar. *"27 of 40 gels detached before
+day 7"* is one number, and shipping that number is categorically different from
+shipping the notebook.
+
+That has a code consequence, and it is the one thing here worth doing early.
+`Evidence` currently **requires** a `quote` — the sentence the number came from
+— and `provenance` tags every non-derived value `LITERATURE`. Both are wrong for
+this source:
+
+- The quote is the leak. A notebook sentence carries the experiment, the date,
+  and often the person.
+- The tag is an understatement. A number counted off primary records is
+  *stronger* evidence than one read out of a paper, not weaker.
+
+A `BenchlingSource` therefore needs a third provenance tag (`PRIMARY`), an
+opaque tenant-local identifier in place of a DOI, and a quote field that is a
+**count statement** (`"27/40 before 168 h"`) rather than a transcript. Make that
+change before any adapter exists, not after — otherwise the first working query
+is also the first leak.
+
+**The better product is write-back, not read.** Reading Benchling calibrates the
+twin once. *Writing* to Benchling puts the power calculation into the entry
+**before the plate is cast**, as a result row against the protocol. That makes
+refute part of the experimental record rather than a website someone visits —
+pre-registration by default, inside the tool the lab already opens every
+morning. It is also the only version of this a PI has an obvious reason to
+approve.
+
+### 13.2 BenchFlow — the collision §2 did not see
+
+§2 has the strategy right: BenchFlow is the harness layer, refute contributes
+the scorer, and being an environment is distribution. What §2 missed is a hard
+constraint:
+
+> **The twin cannot ship as a downloadable environment before the MPhil data is
+> published.** `calibration.py` carries the measured fill percentages and the
+> 6/6 vs 0/4 split; `score.py` quotes them back in its diagnosis strings.
+> Publishing the container publishes the result.
+
+That is not a reason to skip BenchFlow. It is a reason to be deliberate about
+which half goes:
+
+| Ships | Why it is safe |
+|---|---|
+| `tier0` | arithmetic over caller-supplied numbers; no constant of ours in it |
+| The blocked-constant dataset | claims about what the literature omits — that *is* the Track B deliverable |
+| `RefuteEnv` + `baselines` | code, not calibration |
+| The exp4 twin | ⛔ not until published, or the PI signs off |
+
+The middle path is already built. If entrants **download** the environment they
+have the constants; if they **call** it, they do not. `api.py` exists and
+`/score` is keyless. Hosting the twin behind an endpoint is not a deployment
+convenience — it is the confidentiality boundary that makes public benchmarking
+possible at all before publication.
+
+The pleasing part: that is the same architecture §9.1 wanted for Goodhart. An
+agent that cannot read `twin.py` cannot overfit to its equations, and an agent
+that cannot read `calibration.py` cannot leak an unpublished result. The
+confidentiality constraint and the anti-gaming constraint want the identical
+design. Take the win.
+
+### 13.3 What this changes about the order
+
+Nothing, this weekend. Benchling gates on a tenant that may not exist and a
+permissions conversation that cannot be had at a hackathon. BenchFlow packaging
+is interface work worth nothing until the sweep says what the twin can honestly
+assert. Both are post-event.
+
+One exception, because it is ~15 lines and it is a correctness fix whether or
+not Benchling ever happens: the `PRIMARY` provenance tag and the count-statement
+quote. An evidence model that cannot express *"counted off primary records"* has
+a gap in it, and the fix is cheap while nothing depends on it yet.
+
+Sequence otherwise unchanged: **sweep first** (§12.4).
