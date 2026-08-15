@@ -1253,6 +1253,103 @@ concrete step is small: pull twenty CONSORT diagrams and measure how often
 per-arm loss with reasons is machine-readable. That number decides whether this
 is a direction or a footnote.
 
+### 12.4 Build order for the event — sweep first, then build
+
+Written 2026-08-15, before the hack starts. The order matters: **the sweep
+decides what tier 1 can contain**, so building tier 1 before running it means
+guessing at which assays are reachable. Everything below is sequenced so the
+data arrives before the decision it informs.
+
+#### Phase 1 — the sweep (do this first, ~1 hour, no code)
+
+Run `refute search` and `refute infer` across the **five uncalibrated
+scaffolds**. For every one of the 35 missing constants, record one of:
+
+| outcome | meaning |
+|---|---|
+| `FOUND` | stated in full text, with the sentence |
+| `INFERRED` | recoverable by arithmetic (§11 rules), with the derivation |
+| `NOT_REPORTED` | searched, genuinely absent — requires a recorded query |
+| `NOT_YET_SEARCHED` | not looked for; asserts nothing |
+
+Two numbers come out, and they are the Track B result:
+
+- **readout vs failure recovery** — the asymmetry, now measured on full text
+  rather than abstracts, which is the thing §6's 0/10 could not establish
+- **stated vs inferred** — how much of the gap `refute infer` closes. If
+  inference recovers a large share, that is the scalable lever; if it recovers
+  none, the contribution format is the only route and that is worth knowing
+  before building for it.
+
+The sweep is also the honest test of my own correction: §6's 0/10 measured
+abstracts. Anything above zero here changes the pitch.
+
+#### Phase 2 — tier 0 (small, certain, do regardless)
+
+Already built and cross-validated. Two gaps, both known:
+
+1. **Effective *n* under attrition.** `tier0` takes the designed *n* as
+   delivered. For an assay with known exogenous loss it should accept an
+   attrition rate and report the *n* you actually analyse. This is what makes
+   demoting `fibrosis_on_chip` and `stiffness_drift` (§12.1) truthful rather
+   than convenient — they lose units, that loss is non-differential, and pricing
+   it is exactly what tier 0 is for.
+2. **Deploy the browser form.** Built, cross-checked against `tier0.py` at build
+   time, not yet live.
+
+#### Phase 3 — tier 1 (gated on Phase 1)
+
+For each of the four *phenotype-coupled* uncalibrated scaffolds — `traction_force`,
+`scar_in_a_jar`, `cell_derived_matrix`, `bleomycin_lung` — the decision rule is
+already in the code and should not be softened: `require_runnable()` passes only
+when **every** constant has a value and the status admits it.
+
+So Phase 3 is not "calibrate the scaffolds". It is: **fill what the sweep found,
+then see which (if any) clear the gate.** The expected outcome, recorded in
+advance in §6.5, is that most stay SCAFFOLD. `bleomycin_lung` is the standing
+bet, and today's live evidence already put its mortality rate within reach.
+
+If a scaffold clears, the immediate follow-on is the one that matters: **run the
+agent loop against it** and see whether the finding replicates on an assay that
+is not ours. That is the difference between "my experiment failed" and "this
+generalises".
+
+#### Phase 4 — tier 2 (not a build target)
+
+Empty by construction, and it stays empty until tier 1 has several members.
+Nothing to build: the backlog populates itself from `out_of_twin_scope`
+refusals. Listed only so that "why is tier 2 empty" has an answer other than
+"we ran out of time".
+
+#### Phase 5 — the chat, with the Paperclip fallback
+
+`refute chat` is built and keyless. The version worth having connects the
+literature path: when someone asks about an assay with no twin, the chat should
+search rather than refuse —
+
+> *"No twin for scratch-wound assays. Effect sizes are reported in 6 of 8
+> papers; no delamination rate anywhere. So I can tell you whether you are
+> underpowered, and I cannot tell you whether the assay survives."*
+
+That turns a dead end into the useful answer, and it makes the chat a **funnel
+that accumulates the Track B dataset from real questions** — which is the one
+way this collects data that cannot be scraped.
+
+Gated like `/run`: the computed path stays keyless and public; the literature
+path needs an explicit enable and a per-session cap, because a public endpoint
+spending the owner's Paperclip budget per message is not something to ship first
+and gate afterwards.
+
+#### What "done" looks like
+
+In order of how much it would cost to lose:
+
+1. The sweep's two numbers, with the queries recorded
+2. Tier 0 deployed and honest about attrition
+3. Whatever tier 1 the evidence actually supports — including none
+4. The chat, keyless path live
+5. The Paperclip fallback, gated
+
 ### 12.3 What survives contact with any domain
 
 Not the fibrin physics. The **refusal gate**: `runnable()` splitting the registry
