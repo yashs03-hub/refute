@@ -9,9 +9,22 @@
     "This is the one fixture where a field other than the reason matters: the",
     "route depends on COUNTING assumed provenances, and on each of them",
     "carrying a plausible_range. It still never reads a value.",
-    "Every value below is the real fit from refute/calibration.py, relabelled.",
-    "That is deliberate: the fixture shows that provenance, not plausibility,",
-    "is what the gate must route on."
+    "Every tier-1 value below is the real fit from refute/calibration.py,",
+    "relabelled. That is deliberate: the fixture shows that provenance, not",
+    "plausibility, is what the gate must route on.",
+    "Total over both requirement sets, per the convention in full_coverage.json,",
+    "and tier 0 is deliberately short of the two quantities it cannot be given.",
+    "alpha and n_per_arm are supplied because they are genuinely available - a",
+    "threshold and a well count, neither of them a measurement. effect_size and",
+    "within_arm_sd are blocked, so the fallback does not open and the route",
+    "stays REFUSE, which is what this fixture is for: a twin made mostly of",
+    "stand-ins is refused on its own account, not rescued by arithmetic. Supply",
+    "those two and the route becomes tier 0, at which point this file stops",
+    "testing the assumed-fraction rule and duplicates tier1_gaps_tier0_ok.",
+    "Blocked ASSAY_SPECIFIC for the reason set out in all_blocked.json: a",
+    "within-arm SD in this rig's fill-points transfers nowhere, and no corpus",
+    "prints either quantity, so NOT_REPORTED would assert a search that could",
+    "not have been run."
   ],
   "assay_key": "fibrin_contracture",
   "requirement_version": "825ff3a19ed5",
@@ -82,6 +95,29 @@
       "provenance": "assumed",
       "source": "FIXTURE:assumed - stand-in for a facility contamination rate",
       "plausible_range": [0.0, 0.2]
+    },
+    "effect_size": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    },
+    "within_arm_sd": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    },
+    "alpha": {
+      "value": 0.05,
+      "units": "probability",
+      "provenance": "assumed",
+      "source": "refute/tier0.py DEFAULT_ALPHA - conventional two-sided threshold, stated rather than inherited",
+      "plausible_range": [0.01, 0.05]
+    },
+    "n_per_arm": {
+      "value": 3.0,
+      "units": "wells per arm",
+      "provenance": "primary",
+      "source": "cases/exp4/PROVENANCE.md - 12 wells across 4 conditions"
     }
   },
   "unmodelled_mentions": []

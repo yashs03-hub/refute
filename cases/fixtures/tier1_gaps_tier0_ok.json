@@ -6,7 +6,11 @@
     "Routes to: refuse the twin, answer the power question anyway, and say",
     "which half of the question went unanswered.",
     "value is null on every blocked entry. The resolved numbers are the real",
-    "fits in refute/calibration.py; the route does not read them."
+    "fits in refute/calibration.py; the route does not read them.",
+    "Total over both requirement sets, per the convention in full_coverage.json.",
+    "This is the fixture the convention was read off: tier-1 6/10 covered and",
+    "tier-0 4/4 covered is a set that is fully answered for the route it takes,",
+    "which is only visible if both denominators are printed."
   ],
   "assay_key": "fibrin_contracture",
   "requirement_version": "825ff3a19ed5",

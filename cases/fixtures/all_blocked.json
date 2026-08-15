@@ -1,12 +1,28 @@
 {
   "_note": [
-    "Nothing resolved, and no tier-0 fallback either: the tier-0 keys are",
-    "absent, not blocked, because nobody supplied them.",
+    "Nothing resolved, and no tier-0 fallback either: all four tier-0 keys are",
+    "present and blocked, because nobody supplied them.",
     "Routes to: no verdict of any kind, and a list of what would be needed.",
     "Every value is null, which is the whole point of the file - the gate can",
     "route this set without a single number in it.",
     "No entry is NOT_YET_SEARCHED, so the set is complete: this is a claim",
-    "that the search happened and came back empty, not that it never ran."
+    "that the search happened and came back empty, not that it never ran.",
+    "Total over both requirement sets, per the convention in full_coverage.json.",
+    "The tier-0 keys were absent in an earlier revision of this file, which is a",
+    "different statement from blocked and the wrong one: absent reads as a gap",
+    "in the fixture, blocked reads as a gap in the evidence, and only the second",
+    "is what this file is asserting.",
+    "They are blocked ASSAY_SPECIFIC rather than NOT_REPORTED, and the choice is",
+    "worth stating because it is not a comfortable fit. NOT_REPORTED is a claim",
+    "about publishing practice and requires the query that came back empty - but",
+    "tier-0 quantities are not recovered from a corpus at all (see",
+    "requirements.tier0_needs), so no query could be recorded and none should be",
+    "invented. ASSAY_SPECIFIC is the only blocking reason that is a property of",
+    "the experiment rather than a claim about the literature. It reads true for",
+    "effect_size and within_arm_sd, which are in this rig's fill-points and",
+    "transfer nowhere, and it is a stretch for alpha, which is a choice nobody",
+    "made. The vocabulary has no reason for 'the experimenter did not state it';",
+    "naming that here is better than picking a reason that reads as evidence."
   ],
   "assay_key": "fibrin_contracture",
   "requirement_version": "825ff3a19ed5",
@@ -78,6 +94,26 @@
       ]
     },
     "p_contamination": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    },
+    "effect_size": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    },
+    "within_arm_sd": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    },
+    "alpha": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    },
+    "n_per_arm": {
       "value": null,
       "reason": "assay_specific",
       "queries_run": []

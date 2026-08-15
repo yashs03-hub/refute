@@ -32,32 +32,16 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import Iterable, Mapping, Protocol
 
-from .assays.evidence import BlockedReason
-
-
-class Provenance(Enum):
-    """Where a number came from. Ordered strongest first.
-
-    `PRIMARY` outranks `LITERATURE` deliberately: a value counted off primary
-    records - a lab notebook, a robot's execution log - is stronger evidence
-    than one read out of a paper, because it has not passed through the
-    publication filter that removes the runs that failed.
-    """
-
-    MEASURED = "measured"      # fitted to primary data held in this repository
-    PRIMARY = "primary"        # counted off primary records (ELN, robot log)
-    LITERATURE = "literature"  # extracted from a published methods section
-    DERIVED = "derived"        # computed from reported quantities
-    ASSUMED = "assumed"        # nobody's measurement; a stand-in with a range
-
-    @property
-    def is_evidence(self) -> bool:
-        """False for ASSUMED. A twin built mostly of stand-ins is not a twin."""
-        return self is not Provenance.ASSUMED
+# `Provenance` is defined in `assays.evidence` and re-exported here, which is
+# the reverse of where it looks like it belongs. This module already imports
+# `BlockedReason` from there, and `Evidence` needs to name a provenance tier, so
+# defining it here would be an unconditional import cycle rather than a latent
+# one. Re-exporting keeps `from refute.resolve import Provenance` working: it is
+# the same object, and this is still the module that routes on it.
+from .assays.evidence import BlockedReason, Provenance
 
 
 # Tier 0 is assay-blind arithmetic, so its requirements are not per-protocol.

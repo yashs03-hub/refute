@@ -6,7 +6,11 @@
     "than the experiment poses.",
     "Routes to: build the twin, and carry these forward as a caveat rather than",
     "silently dropping them. They are prose, never numbers, so nothing here",
-    "tempts the gate to compute with them."
+    "tempts the gate to compute with them.",
+    "Total over both requirement sets, per the convention in full_coverage.json.",
+    "The tier-0 quantities are in hand and unused: the mentions below are a",
+    "limit of the twin that no amount of tier-0 arithmetic addresses, since",
+    "tier 0 has no mechanism to leave out in the first place."
   ],
   "assay_key": "fibrin_contracture",
   "requirement_version": "825ff3a19ed5",
@@ -71,6 +75,32 @@
       "units": "probability",
       "provenance": "measured",
       "source": "cases/exp4/PROVENANCE.md"
+    },
+    "effect_size": {
+      "value": 8.0,
+      "units": "fill-points",
+      "provenance": "assumed",
+      "source": "FIXTURE:assumed - the smallest difference that would change a decision. Experiment 4 never measured one; fibrinolysis removed the endpoint first.",
+      "plausible_range": [4.0, 15.0]
+    },
+    "within_arm_sd": {
+      "value": 2.4,
+      "units": "fill-points",
+      "provenance": "primary",
+      "source": "cases/exp4/data/observed_timecourse.csv - within-arm SD at 120 h"
+    },
+    "alpha": {
+      "value": 0.05,
+      "units": "probability",
+      "provenance": "assumed",
+      "source": "refute/tier0.py DEFAULT_ALPHA - conventional two-sided threshold, stated rather than inherited",
+      "plausible_range": [0.01, 0.05]
+    },
+    "n_per_arm": {
+      "value": 3.0,
+      "units": "wells per arm",
+      "provenance": "primary",
+      "source": "cases/exp4/PROVENANCE.md - 12 wells across 4 conditions"
     }
   },
   "unmodelled_mentions": [
