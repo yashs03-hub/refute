@@ -1184,3 +1184,78 @@ estimate, and the only calibrated variance in this repo is the twin's — so a p
 tool is the twin wearing a hat. Building it would cross §11.1's boundary while
 looking like a capability improvement. If it is built later, the variance must come
 from the agent's own stated assumptions, not from `calibration.py`.
+
+---
+
+## 12. Where this goes next — two leads, one strong
+
+Recorded 2026-08-15. Neither is built. Both came out of asking how this scales
+past one assay, and the second is the better idea in the project.
+
+### 12.1 The coupled/exogenous split IS the scaling rule
+
+§6.6 tiers cases by the defect they encode. The sharper cut is *what drives the
+dropout*, and `tests/test_hazard_classes.py` now pins it:
+
+| dropout driven by | scaffolds | needs a twin? |
+|---|---|---|
+| the phenotype being measured | traction_force, scar_in_a_jar, cell_derived_matrix, bleomycin_lung | **yes** |
+| an applied parameter or elapsed time | fibrosis_on_chip, stiffness_drift | **no** |
+
+Exogenous dropout is roughly non-differential: it is set identically across arms,
+so it costs you *n* and nothing else. Tier 0 already prices lost *n* — or will,
+once it accepts an expected attrition rate and reports an effective *n* rather
+than taking the designed *n* as delivered. That is a small addition and it is the
+honest way to demote those two.
+
+Only phenotype-coupled dropout needs tier 1, because only there are the survivors
+a biased sample of the units you cared about. So the scaling claim for fibrosis
+is: **two of six demote to tier 0; four need constants nobody publishes.**
+
+### 12.2 CONSORT — the strong lead
+
+The general name for the coupled case already exists: **informative censoring**,
+or MNAR. This project's contribution is not a new statistical category but a
+*mechanistic, calibrated, refusable* instance of one, against the generic
+delta-adjustment sensitivity analysis the field does instead. Naming it that way
+is what makes it portable, because the shape recurs everywhere — sicker patients
+withdraw from trials, bad surgical results are lost to follow-up, partial
+verification bias in diagnostics, informative observation times in EHR cohorts.
+
+**And here is the asymmetry worth building on.** Preclinical papers publish the
+readout and hide the failures — that is §6's 0/10. Clinical trials publish the
+failures, because **CONSORT mandates a flow diagram**: enrolled, allocated, lost
+to follow-up with reasons, analysed — *per arm*.
+
+Per-arm attrition with reasons is exactly the format `cases/TEMPLATE/` asks a
+contributor for, and exactly what §6 could not find in bench literature. It is
+mandated, structured, and present in thousands of papers.
+
+So, counterintuitively: **tier 1 scales more easily into clinical trials than
+into the bench assays it was born in.** The input that is unobtainable in vitro
+is a reporting requirement in RCTs.
+
+It also supplies the coupling the same way Experiment 4 did. Per-patient coupling
+is circular — a patient who dropped out has no outcome — but *differential*
+dropout between arms is visible at arm level, and arm membership stands in for
+the phenotype. That is the identical trick, one domain up.
+
+**What is not established, and should not be claimed:**
+
+- Many CONSORT diagrams are images, not text. Extraction yield is untested.
+- Reasons for loss are often collapsed into a single number per arm, which gives
+  the rate but not the mechanism.
+- It unblocks the *data*, not the *modelling*. A twin still has to exist per
+  clinical domain, and nothing here says that is cheap.
+
+Treat it as the most promising lead in the project, not a result. The next
+concrete step is small: pull twenty CONSORT diagrams and measure how often
+per-arm loss with reasons is machine-readable. That number decides whether this
+is a direction or a footnote.
+
+### 12.3 What survives contact with any domain
+
+Not the fibrin physics. The **refusal gate**: `runnable()` splitting the registry
+so the catalogue can grow without the claims growing. Fifty scaffolds can be
+added and still only what is calibrated is asserted. That property is what makes
+this portable at all.
