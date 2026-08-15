@@ -269,6 +269,52 @@ def cmd_advise(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_route(args: argparse.Namespace) -> int:
+    """Walk a resolution set through the whole downstream pipeline.
+
+    Exits 0 for every route, including the refusals. A stop is an outcome here,
+    not an error: "the requirement set is unfinished" and "the twin cannot model
+    this" are things the pipeline is FOR, and a non-zero exit would mark them as
+    malfunctions in any script that wrapped this. Only a broken invocation - an
+    unreadable fixture, an unknown assay - is a failure.
+    """
+    from .assays import get
+    from .design import EXPERIMENT_4_AS_RUN
+    from .pipeline import run
+    from .resolve import FixtureResolver
+
+    try:
+        protocol = get(args.assay)
+    except KeyError as exc:
+        _print("UNKNOWN", str(exc))
+        return 2
+
+    try:
+        result = run(
+            EXPERIMENT_4_AS_RUN,
+            protocol,
+            FixtureResolver(args.fixture),
+            n_sims=args.sims,
+        )
+    except (OSError, ValueError) as exc:
+        # A fixture that will not load, or one written for a different assay.
+        # Loud, because a silent fallback here would report a route computed
+        # from something other than the file the user named.
+        _print("FIXTURE NOT USABLE", f"{type(exc).__name__}: {exc}")
+        return 2
+
+    _print(
+        f"ROUTE: {result.decision.route.value}",
+        f"design   Experiment 4 as run ({EXPERIMENT_4_AS_RUN.total_wells} wells, "
+        f"endpoint {EXPERIMENT_4_AS_RUN.endpoint_time_h:.0f} h)\n"
+        f"assay    {protocol.key}\n"
+        f"fixture  {args.fixture}\n"
+        f"why      {result.decision.why}\n\n"
+        + result.render(),
+    )
+    return 0
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     """Query a live corpus. The one path that actually hits the network.
 
@@ -933,6 +979,19 @@ def main(argv: list[str] | None = None) -> int:
         "--all", action="store_true", help="also list changes that did not help"
     )
     p_adv.set_defaults(func=cmd_advise)
+
+    p_route = sub.add_parser(
+        "route",
+        parents=[common],
+        help="resolve -> gate -> simulate -> advise, from a resolution fixture",
+    )
+    p_route.add_argument(
+        "--fixture", required=True, help="path to a ResolutionSet JSON file"
+    )
+    p_route.add_argument(
+        "--assay", default="fibrin_contracture", help="assay key the fixture answers"
+    )
+    p_route.set_defaults(func=cmd_route)
 
     p_search = sub.add_parser(
         "search",

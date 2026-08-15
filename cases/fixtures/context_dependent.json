@@ -1,0 +1,79 @@
+{
+  "_note": [
+    "The distinction most likely to be collapsed by accident. The aprotinin",
+    "hazard multiplier is not absent - it is ill-posed as a scalar, because it",
+    "depends on dose, on medium exchange schedule, and on how contractile the",
+    "cells already are. refute/calibration.py says the same thing of it in",
+    "prose: sweep it, never report a single value.",
+    "Routes to: build the twin, sweep this one requirement, and report the",
+    "verdict as sensitive to it. It must NOT route as a gap.",
+    "value is null here and the route still resolves, which is the property."
+  ],
+  "assay_key": "fibrin_contracture",
+  "requirement_version": "825ff3a19ed5",
+  "resolutions": {
+    "plateau_fill_pct": {
+      "value": 13.8,
+      "units": "%",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "contraction_tau_h": {
+      "value": 8.37,
+      "units": "h",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "measurement_noise_pct": {
+      "value": 1.7,
+      "units": "fill-points",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "measurement_bias_pct": {
+      "value": 1.8,
+      "units": "fill-points",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "lysis_shape": {
+      "value": 4.108,
+      "units": "-",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "lysis_scale_contractile_h": {
+      "value": 183.7,
+      "units": "h",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "lysis_scale_quiescent_h": {
+      "value": 494.5,
+      "units": "h",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "aprotinin_hazard_scale": {
+      "value": null,
+      "reason": "context_dependent",
+      "queries_run": [
+        "aprotinin dose response fibrin lysis KIU/ml fibroblast culture",
+        "antifibrinolytic concentration dependence gel survival"
+      ]
+    },
+    "p_cast_failure": {
+      "value": 0.0833,
+      "units": "probability",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "p_contamination": {
+      "value": 0.0833,
+      "units": "probability",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    }
+  },
+  "unmodelled_mentions": []
+}

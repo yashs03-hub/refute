@@ -1,0 +1,110 @@
+{
+  "_note": [
+    "The case the tier-0 fallback exists for. Every hazard constant is",
+    "NOT_REPORTED - the survivorship class, the numbers nobody publishes -",
+    "while all four assay-blind tier-0 quantities are in hand.",
+    "Routes to: refuse the twin, answer the power question anyway, and say",
+    "which half of the question went unanswered.",
+    "value is null on every blocked entry. The resolved numbers are the real",
+    "fits in refute/calibration.py; the route does not read them."
+  ],
+  "assay_key": "fibrin_contracture",
+  "requirement_version": "825ff3a19ed5",
+  "resolutions": {
+    "plateau_fill_pct": {
+      "value": 13.8,
+      "units": "%",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "contraction_tau_h": {
+      "value": 8.37,
+      "units": "h",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "measurement_noise_pct": {
+      "value": 1.7,
+      "units": "fill-points",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "measurement_bias_pct": {
+      "value": 1.8,
+      "units": "fill-points",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "lysis_shape": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "anchored fibrin gel construct fibrinolysis time to dissolution fibroblast methods",
+        "fibrin hydrogel degradation kinetics Weibull survival culture"
+      ]
+    },
+    "lysis_scale_contractile_h": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "fibrin gel lysis TGF-beta treated fibroblast days to failure",
+        "cell-mediated fibrinolysis rate contractile fibroblast anchored construct"
+      ]
+    },
+    "lysis_scale_quiescent_h": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "fibrin gel lysis untreated control fibroblast days to failure",
+        "quiescent fibroblast fibrin construct stability duration culture"
+      ]
+    },
+    "aprotinin_hazard_scale": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "aprotinin KIU/ml fibrin gel lysis prevention fibroblast culture",
+        "antifibrinolytic tranexamic aprotinin fibrin construct survival effect size"
+      ]
+    },
+    "p_cast_failure": {
+      "value": 0.0833,
+      "units": "probability",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "p_contamination": {
+      "value": 0.0833,
+      "units": "probability",
+      "provenance": "measured",
+      "source": "cases/exp4/PROVENANCE.md"
+    },
+    "effect_size": {
+      "value": 8.0,
+      "units": "fill-points",
+      "provenance": "assumed",
+      "source": "FIXTURE:assumed - the smallest difference that would change a decision. Experiment 4 never measured one; fibrinolysis removed the endpoint first.",
+      "plausible_range": [4.0, 15.0]
+    },
+    "within_arm_sd": {
+      "value": 2.4,
+      "units": "fill-points",
+      "provenance": "primary",
+      "source": "cases/exp4/data/observed_timecourse.csv - within-arm SD at 120 h"
+    },
+    "alpha": {
+      "value": 0.05,
+      "units": "probability",
+      "provenance": "assumed",
+      "source": "refute/tier0.py DEFAULT_ALPHA - conventional two-sided threshold, stated rather than inherited",
+      "plausible_range": [0.01, 0.05]
+    },
+    "n_per_arm": {
+      "value": 3.0,
+      "units": "wells per arm",
+      "provenance": "primary",
+      "source": "cases/exp4/PROVENANCE.md - 12 wells across 4 conditions"
+    }
+  },
+  "unmodelled_mentions": []
+}

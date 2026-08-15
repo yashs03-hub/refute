@@ -1,0 +1,87 @@
+{
+  "_note": [
+    "Nothing resolved, and no tier-0 fallback either: the tier-0 keys are",
+    "absent, not blocked, because nobody supplied them.",
+    "Routes to: no verdict of any kind, and a list of what would be needed.",
+    "Every value is null, which is the whole point of the file - the gate can",
+    "route this set without a single number in it.",
+    "No entry is NOT_YET_SEARCHED, so the set is complete: this is a claim",
+    "that the search happened and came back empty, not that it never ran."
+  ],
+  "assay_key": "fibrin_contracture",
+  "requirement_version": "825ff3a19ed5",
+  "resolutions": {
+    "plateau_fill_pct": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "anchored fibrin gel contracture plateau area reduction fibroblast",
+        "fibrin construct final gel area percent well contracture endpoint"
+      ]
+    },
+    "contraction_tau_h": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "fibrin gel contraction half-time hours fibroblast time constant",
+        "collagen fibrin construct contraction kinetics exponential time course"
+      ]
+    },
+    "measurement_noise_pct": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": [
+        "gel area measurement precision imaging repeatability fibroblast construct"
+      ]
+    },
+    "measurement_bias_pct": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    },
+    "lysis_shape": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "fibrin hydrogel degradation kinetics Weibull survival culture",
+        "time to fibrin gel dissolution distribution shape fibroblast"
+      ]
+    },
+    "lysis_scale_contractile_h": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "fibrin gel lysis TGF-beta treated fibroblast days to failure",
+        "cell-mediated fibrinolysis rate contractile fibroblast anchored construct"
+      ]
+    },
+    "lysis_scale_quiescent_h": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "fibrin gel lysis untreated control fibroblast days to failure"
+      ]
+    },
+    "aprotinin_hazard_scale": {
+      "value": null,
+      "reason": "units_mismatch",
+      "queries_run": [
+        "aprotinin KIU/ml fibrin gel lysis prevention fibroblast culture"
+      ]
+    },
+    "p_cast_failure": {
+      "value": null,
+      "reason": "not_reported",
+      "queries_run": [
+        "fibrin construct casting failure rate wells excluded methods",
+        "gel did not form excluded well hydrogel fabrication yield"
+      ]
+    },
+    "p_contamination": {
+      "value": null,
+      "reason": "assay_specific",
+      "queries_run": []
+    }
+  },
+  "unmodelled_mentions": []
+}
