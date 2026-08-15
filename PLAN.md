@@ -329,7 +329,7 @@ working artefact that motivates it and gives the dataset a use.
 | Track B entry is judged as a literature-mining exercise | Lead with the absence, not the extraction. The dataset's value is which constants are *missing* and the pattern in which ones — a claim about publishing practice that no single paper can support |
 | Judged as sitting out the safety conversation the week AI-designed phages hit the news | §8. The architecture already takes a position — generator never verifies itself, fails closed, silence is not evidence — and took it before the news. Reframe, do not pivot; the reasons not to pivot are recorded so they are not re-argued on the day |
 | ~~Public presentation is a patent disclosure~~ | ✅ **RETIRED 2026-08-10 — no patent.** Decided deliberately, not defaulted into. The method can be presented, written up and open-sourced without restriction |
-| Conflating "no patent" with "the data can go public" | Two different questions, and only one is settled. The repo stays **PRIVATE** because `cases/exp4/data/` is unpublished research data on consented waste tissue: that is governed by the ethics approval and by publication priority, neither of which a patent decision touches. Note the *derived* values leak too — `calibration.py` carries the measured fill percentages and the 6/6 vs 0/4 lysis split, and `score.py`'s diagnosis strings quote them. Publishing the code publishes the result |
+| ~~Conflating "no patent" with "the data can go public"~~ | ✅ **RETIRED 2026-08-15 — owner is content to publish the results.** Recorded because the reasoning changed, not just the answer: see §13.4. The remaining gate is authorship, not ethics, and it is not the owner's alone |
 
 ---
 
@@ -1464,35 +1464,64 @@ approve.
 ### 13.2 BenchFlow — the collision §2 did not see
 
 §2 has the strategy right: BenchFlow is the harness layer, refute contributes
-the scorer, and being an environment is distribution. What §2 missed is a hard
-constraint:
+the scorer, and being an environment is distribution. What §2 missed was a
+constraint that has since been **lifted** — see §13.4. Everything below now
+ships, including the twin:
 
-> **The twin cannot ship as a downloadable environment before the MPhil data is
-> published.** `calibration.py` carries the measured fill percentages and the
-> 6/6 vs 0/4 split; `score.py` quotes them back in its diagnosis strings.
-> Publishing the container publishes the result.
-
-That is not a reason to skip BenchFlow. It is a reason to be deliberate about
-which half goes:
-
-| Ships | Why it is safe |
+| Ships | Why |
 |---|---|
 | `tier0` | arithmetic over caller-supplied numbers; no constant of ours in it |
 | The blocked-constant dataset | claims about what the literature omits — that *is* the Track B deliverable |
 | `RefuteEnv` + `baselines` | code, not calibration |
-| The exp4 twin | ⛔ not until published, or the PI signs off |
+| The exp4 twin | ✅ owner is content to publish the results (2026-08-15) |
 
-The middle path is already built. If entrants **download** the environment they
-have the constants; if they **call** it, they do not. `api.py` exists and
-`/score` is keyless. Hosting the twin behind an endpoint is not a deployment
-convenience — it is the confidentiality boundary that makes public benchmarking
-possible at all before publication.
+**The architecture recommendation does not change, and why it does not is worth
+being precise about.** This section originally rested the
+host-behind-an-endpoint design on confidentiality: if entrants **download** the
+environment they have the constants, if they **call** it they do not. That leg
+is now gone. The other leg is untouched:
 
-The pleasing part: that is the same architecture §9.1 wanted for Goodhart. An
-agent that cannot read `twin.py` cannot overfit to its equations, and an agent
-that cannot read `calibration.py` cannot leak an unpublished result. The
-confidentiality constraint and the anti-gaming constraint want the identical
-design. Take the win.
+> An agent that can read `twin.py` and `calibration.py` can overfit to the
+> equations instead of designing a good experiment. That is §9.1, and
+> publication permission does nothing to it.
+
+So keep the hosted endpoint — `api.py` exists and `/score` is keyless — but
+keep it **for Goodhart, not for secrecy**. Two independent arguments happened to
+want the same design; one has been retired and the design stands on the other.
+Do not carry the retired argument forward, and do not let "confidential" creep
+back into the pitch as a justification for something now justified differently.
+
+### 13.4 What "publishing the results" settles, and what it does not
+
+Owner decision, 2026-08-15: content to publish the results. Recorded with its
+reasoning, because the previous version of this plan got the *category* wrong.
+
+**What was wrong.** §5 treated this as governed by "the ethics approval and by
+publication priority". But look at what is actually in `cases/exp4/data/`:
+eighteen rows of per-well gel-area percentages by day. There is no
+donor-identifiable information in a fill-percentage timecourse, and the REC
+approval governs *use* of the waste tissue — which already happened, lawfully.
+Publishing this file was never an ethics question, and framing it as one
+overstated the constraint for eleven days.
+
+**What is actually left**, and it is one thing:
+
+- **Authorship and priority.** This is MPhil work supervised in the McCaskie
+  group. Publishing the constants and the 6/6 vs 0/4 split *is* publishing the
+  result, and the owner is not the only person with a stake in when and where
+  that happens. "I don't mind" settles one of the required yeses. Flag it to the
+  PI; this section does not do that for you.
+
+**Unblocked immediately:** the BenchFlow environment can carry the twin; the
+demo can quote the numbers without hedging; and the calibration becomes
+*checkable* by a third party — which materially strengthens a Track B "Build
+the Dataset" entry, since a dataset nobody can obtain is a weak dataset.
+
+**NOT authorised by this:** flipping the repository to public. That is a
+separate and irreversible action the owner has not asked for, and it releases
+far more than the results — this plan, the recorded agent runs, and every
+internal argument in it. Publishing findings and publishing a working
+repository are different releases. Ask before touching visibility.
 
 ### 13.3 What this changes about the order
 
