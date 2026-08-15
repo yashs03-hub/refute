@@ -1,6 +1,6 @@
 # Experiment 4 — provenance
 
-## ⚠ Unpublished data
+## Unpublished data — clearable for release (2026-08-15)
 
 `data/observed_timecourse.csv` contains **unpublished MPhil research data**
 (primary human synovial fibroblasts, consented waste tissue). It is included
@@ -8,8 +8,21 @@ because the twin's calibration is meaningless without the measurements it was
 fitted to — a benchmark whose ground truth you cannot inspect is not a
 benchmark.
 
-**This repository must stay private** until the underlying work is published or
-the author decides otherwise. Do not redistribute the CSV.
+**The author is content to publish the results.** Two corrections to what this
+file used to say:
+
+- This is **not an ethics question.** The file is eighteen rows of per-well
+  gel-area percentages. Nothing in a fill-percentage timecourse identifies a
+  donor, and the REC approval governs *use* of the waste tissue, which already
+  happened lawfully.
+- ~~The remaining gate is **authorship and priority**~~ — **cleared by the owner
+  2026-08-15.** The data may be used and the results published. No open gate
+  remains on the measurements themselves.
+
+**The repository is nonetheless still private**, because making it public is a
+separate decision that has not been taken — it would release this plan, the
+recorded agent runs and every internal argument, not just the measurements.
+Releasing the results and opening the repository are different acts.
 
 ## What was run
 

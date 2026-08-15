@@ -5,6 +5,26 @@ destroys the assay.** That coupling is what a power calculation cannot model
 and what makes a twin worth building. An assay whose failure is merely a
 function of elapsed time is real but ordinary.
 
+**Two of the six do not meet that criterion, and saying so is cheaper than
+being caught by it.** Checked 2026-08-15 against each protocol's own `driver`:
+
+    coupled to the phenotype        traction_force, scar_in_a_jar,
+                                    cell_derived_matrix, bleomycin_lung
+    NOT coupled                     fibrosis_on_chip  (applied cyclic strain -
+                                                       a parameter you set)
+                                    stiffness_drift   (time in culture)
+
+That matters because the coupled ones carry the property this project is
+actually about: the units that fail are the ones carrying the largest effect, so
+the survivors are biased toward the null and the requirement is not estimable
+until the failure is fixed. An independent hazard has none of that. It is
+easier - no survivorship bias, no coupling constant, and plausibly recoverable
+from published methods, since a rupture rate per cycle is the kind of thing a
+device paper reports.
+
+So they are kept, but not claimed as instances of the coupled class. If the
+generalisation is ever stated as "one mechanism, six instances", it is four.
+
 Every protocol here is a SCAFFOLD. The structure is declared; the numbers are
 absent and will raise `UncalibratedAssayError` if anything tries to score them.
 Each carries the exact list of constants to extract and a Paperclip query to

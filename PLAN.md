@@ -329,7 +329,7 @@ working artefact that motivates it and gives the dataset a use.
 | Track B entry is judged as a literature-mining exercise | Lead with the absence, not the extraction. The dataset's value is which constants are *missing* and the pattern in which ones — a claim about publishing practice that no single paper can support |
 | Judged as sitting out the safety conversation the week AI-designed phages hit the news | §8. The architecture already takes a position — generator never verifies itself, fails closed, silence is not evidence — and took it before the news. Reframe, do not pivot; the reasons not to pivot are recorded so they are not re-argued on the day |
 | ~~Public presentation is a patent disclosure~~ | ✅ **RETIRED 2026-08-10 — no patent.** Decided deliberately, not defaulted into. The method can be presented, written up and open-sourced without restriction |
-| Conflating "no patent" with "the data can go public" | Two different questions, and only one is settled. The repo stays **PRIVATE** because `cases/exp4/data/` is unpublished research data on consented waste tissue: that is governed by the ethics approval and by publication priority, neither of which a patent decision touches. Note the *derived* values leak too — `calibration.py` carries the measured fill percentages and the 6/6 vs 0/4 lysis split, and `score.py`'s diagnosis strings quote them. Publishing the code publishes the result |
+| ~~Conflating "no patent" with "the data can go public"~~ | ✅ **RETIRED 2026-08-15 — owner is content to publish the results.** Recorded because the reasoning changed, not just the answer: see §13.4. The remaining gate is authorship, not ethics, and it is not the owner's alone |
 
 ---
 
@@ -1184,3 +1184,355 @@ estimate, and the only calibrated variance in this repo is the twin's — so a p
 tool is the twin wearing a hat. Building it would cross §11.1's boundary while
 looking like a capability improvement. If it is built later, the variance must come
 from the agent's own stated assumptions, not from `calibration.py`.
+
+---
+
+## 12. Where this goes next — two leads, one strong
+
+Recorded 2026-08-15. Neither is built. Both came out of asking how this scales
+past one assay, and the second is the better idea in the project.
+
+### 12.1 The coupled/exogenous split IS the scaling rule
+
+§6.6 tiers cases by the defect they encode. The sharper cut is *what drives the
+dropout*, and `tests/test_hazard_classes.py` now pins it:
+
+| dropout driven by | scaffolds | needs a twin? |
+|---|---|---|
+| the phenotype being measured | traction_force, scar_in_a_jar, cell_derived_matrix, bleomycin_lung | **yes** |
+| an applied parameter or elapsed time | fibrosis_on_chip, stiffness_drift | **no** |
+
+Exogenous dropout is roughly non-differential: it is set identically across arms,
+so it costs you *n* and nothing else. Tier 0 already prices lost *n* — or will,
+once it accepts an expected attrition rate and reports an effective *n* rather
+than taking the designed *n* as delivered. That is a small addition and it is the
+honest way to demote those two.
+
+Only phenotype-coupled dropout needs tier 1, because only there are the survivors
+a biased sample of the units you cared about. So the scaling claim for fibrosis
+is: **two of six demote to tier 0; four need constants nobody publishes.**
+
+### 12.2 CONSORT — the strong lead
+
+The general name for the coupled case already exists: **informative censoring**,
+or MNAR. This project's contribution is not a new statistical category but a
+*mechanistic, calibrated, refusable* instance of one, against the generic
+delta-adjustment sensitivity analysis the field does instead. Naming it that way
+is what makes it portable, because the shape recurs everywhere — sicker patients
+withdraw from trials, bad surgical results are lost to follow-up, partial
+verification bias in diagnostics, informative observation times in EHR cohorts.
+
+**And here is the asymmetry worth building on.** Preclinical papers publish the
+readout and hide the failures — that is §6's 0/10. Clinical trials publish the
+failures, because **CONSORT mandates a flow diagram**: enrolled, allocated, lost
+to follow-up with reasons, analysed — *per arm*.
+
+Per-arm attrition with reasons is exactly the format `cases/TEMPLATE/` asks a
+contributor for, and exactly what §6 could not find in bench literature. It is
+mandated, structured, and present in thousands of papers.
+
+So, counterintuitively: **tier 1 scales more easily into clinical trials than
+into the bench assays it was born in.** The input that is unobtainable in vitro
+is a reporting requirement in RCTs.
+
+It also supplies the coupling the same way Experiment 4 did. Per-patient coupling
+is circular — a patient who dropped out has no outcome — but *differential*
+dropout between arms is visible at arm level, and arm membership stands in for
+the phenotype. That is the identical trick, one domain up.
+
+**Probed against the live corpus, 2026-08-15.** Partially confirmed, and the
+decisive number is still missing.
+
+*Established:*
+
+- Paperclip indexes trial records with a **first-class `Participant_flow`
+  section**, line-numbered and therefore citable in the same way a paper is.
+  This is better than parsing a PDF diagram — it is already sectioned text.
+- Per-arm allocation appears in prose and is directly readable, e.g.
+  `L494: A total of 502 screened participants were randomly assigned to receive
+  either AVT05 (251 participants) or EU-Simponi (251 participants).`
+- The path form is `/trials/tri_<id>/sections/<Name>.lines`. A `/papers/<uuid>/`
+  path taken from grep output does **not** resolve, and `cat` on it fails.
+
+*Not established, and the reason this stays a lead rather than a plan:*
+
+- **Prevalence is unmeasured.** `grep -c` returns a capped, approximate figure,
+  so "how many trial records carry a usable flow section" is still unknown. That
+  single number decides whether this is a research programme or a footnote.
+- The disposition detail is frequently referenced as **"Figure 6"** — so the
+  per-arm *reasons* for loss may be an image even when the allocation prose is
+  text. Allocation without reasons gives a rate and not a mechanism, which is
+  precisely the half tier 1 already has trouble with.
+- It unblocks the *data*, not the *modelling*. A twin still has to exist per
+  clinical domain, and nothing here says that is cheap.
+
+*Contract note for whoever picks this up:* `grep --from <id>` appears to be
+ignored — a scoped grep over a 3-paper result set returned matches across 50
+papers. Scope by path (`/trials/`) rather than trusting `--from`.
+
+The next step is unchanged and still small: sample twenty records with a
+`Participant_flow` section and count how many give per-arm loss **with reasons**
+as text rather than as a figure.
+
+### 12.4 Build order for the event — sweep first, then build
+
+Written 2026-08-15, before the hack starts. The order matters: **the sweep
+decides what tier 1 can contain**, so building tier 1 before running it means
+guessing at which assays are reachable. Everything below is sequenced so the
+data arrives before the decision it informs.
+
+#### Phase 1 — the sweep (do this first, ~1 hour, no code)
+
+Run `refute search` and `refute infer` across the **five uncalibrated
+scaffolds**. For every one of the 35 missing constants, record one of:
+
+| outcome | meaning |
+|---|---|
+| `FOUND` | stated in full text, with the sentence |
+| `INFERRED` | recoverable by arithmetic (§11 rules), with the derivation |
+| `NOT_REPORTED` | searched, genuinely absent — requires a recorded query |
+| `NOT_YET_SEARCHED` | not looked for; asserts nothing |
+
+Two numbers come out, and they are the Track B result:
+
+- **readout vs failure recovery** — the asymmetry, now measured on full text
+  rather than abstracts, which is the thing §6's 0/10 could not establish
+- **stated vs inferred** — how much of the gap `refute infer` closes. If
+  inference recovers a large share, that is the scalable lever; if it recovers
+  none, the contribution format is the only route and that is worth knowing
+  before building for it.
+
+The sweep is also the honest test of my own correction: §6's 0/10 measured
+abstracts. Anything above zero here changes the pitch.
+
+#### Phase 2 — tier 0 (small, certain, do regardless)
+
+Already built and cross-validated. Two gaps, both known:
+
+1. **Effective *n* under attrition.** `tier0` takes the designed *n* as
+   delivered. For an assay with known exogenous loss it should accept an
+   attrition rate and report the *n* you actually analyse. This is what makes
+   demoting `fibrosis_on_chip` and `stiffness_drift` (§12.1) truthful rather
+   than convenient — they lose units, that loss is non-differential, and pricing
+   it is exactly what tier 0 is for.
+2. **Deploy the browser form.** Built, cross-checked against `tier0.py` at build
+   time, not yet live.
+
+#### Phase 3 — tier 1 (gated on Phase 1)
+
+For each of the four *phenotype-coupled* uncalibrated scaffolds — `traction_force`,
+`scar_in_a_jar`, `cell_derived_matrix`, `bleomycin_lung` — the decision rule is
+already in the code and should not be softened: `require_runnable()` passes only
+when **every** constant has a value and the status admits it.
+
+So Phase 3 is not "calibrate the scaffolds". It is: **fill what the sweep found,
+then see which (if any) clear the gate.** The expected outcome, recorded in
+advance in §6.5, is that most stay SCAFFOLD. `bleomycin_lung` is the standing
+bet, and today's live evidence already put its mortality rate within reach.
+
+If a scaffold clears, the immediate follow-on is the one that matters: **run the
+agent loop against it** and see whether the finding replicates on an assay that
+is not ours. That is the difference between "my experiment failed" and "this
+generalises".
+
+#### Phase 4 — tier 2 (not a build target)
+
+Empty by construction, and it stays empty until tier 1 has several members.
+Nothing to build: the backlog populates itself from `out_of_twin_scope`
+refusals. Listed only so that "why is tier 2 empty" has an answer other than
+"we ran out of time".
+
+#### Phase 5 — the chat, with the Paperclip fallback
+
+`refute chat` is built and keyless. The version worth having connects the
+literature path: when someone asks about an assay with no twin, the chat should
+search rather than refuse —
+
+> *"No twin for scratch-wound assays. Effect sizes are reported in 6 of 8
+> papers; no delamination rate anywhere. So I can tell you whether you are
+> underpowered, and I cannot tell you whether the assay survives."*
+
+That turns a dead end into the useful answer, and it makes the chat a **funnel
+that accumulates the Track B dataset from real questions** — which is the one
+way this collects data that cannot be scraped.
+
+Gated like `/run`: the computed path stays keyless and public; the literature
+path needs an explicit enable and a per-session cap, because a public endpoint
+spending the owner's Paperclip budget per message is not something to ship first
+and gate afterwards.
+
+#### What "done" looks like
+
+In order of how much it would cost to lose:
+
+1. The sweep's two numbers, with the queries recorded
+2. Tier 0 deployed and honest about attrition
+3. Whatever tier 1 the evidence actually supports — including none
+4. The chat, keyless path live
+5. The Paperclip fallback, gated
+
+### 12.3 What survives contact with any domain
+
+Not the fibrin physics. The **refusal gate**: `runnable()` splitting the registry
+so the catalogue can grow without the claims growing. Fifty scaffolds can be
+added and still only what is calibrated is asserted. That property is what makes
+this portable at all.
+
+## 13. Two APIs — Benchling and BenchFlow
+
+### 13.1 Benchling — the denominator
+
+The 35 constants `tier1.py` marks missing across its six scaffolds are not one
+kind of thing. They come in three shapes, and the distinction decides what any
+given source can supply:
+
+| Shape | Examples | Who can supply it |
+|---|---|---|
+| Effect size and variance | `baseline_*`, `*_fold_change`, `*_cv` | papers report these — Paperclip's job |
+| Phenotype-coupled hazards | `p_detach_baseline_per_h`, `detach_force_coupling`, `mortality_severity_coupling` | `NOT_REPORTED` |
+| Exogenous nuisance | `p_field_unusable`, `p_seeding_failure`, `p_contamination_10d`, `p_bubble_per_day` | never published; every lab knows them to two significant figures |
+
+Benchling is useless for the first group and is the only realistic source for
+the third. State the fit that precisely and do not inflate it:
+
+> **Benchling does not help with the constants papers report. It helps with the
+> ones papers omit — which are the ones this whole argument rests on.**
+
+The reason is structural, and it is the same reason §6.1 found 0/10 abstracts
+carrying a per-unit failure rate: papers are the *surviving subset* of
+experiments. The plate that delaminated on day 3 never became a figure. **The
+ELN sits upstream of the publication filter.** Every plate ever cast is in it,
+including the abandoned ones. That is the denominator, and no corpus can supply
+it at any size.
+
+**What the API actually returns.** Benchling's v2 REST API (tenant-scoped,
+Python `benchling-sdk`, App client-credentials or a per-user key) exposes
+roughly four things that matter here:
+
+- **Entries** — ELN pages: free prose plus tables. A failed run reads *"gel
+  detached overnight, discarded"*. Same extraction problem as a paper, minus the
+  survivorship filter.
+- **Assay Results** — schematised numeric rows against a result schema.
+  Per-well numbers, *if* the lab defined a schema.
+- **Containers / Plates** — registered inventory. Well-level identity, *if* the
+  lab registers plates.
+- **Warehouse** — a Postgres read replica, the only sane way to do this in
+  bulk. Paid add-on; assume it is not available.
+
+So the yield is bounded by how the lab uses the product, not by the API.
+Structured registry plus result schemas and the constants fall out as a
+`GROUP BY`. Notebook-only and you are back to LLM extraction — which is fine,
+because "the LLM extracts, the simulator judges" already holds, and a notebook
+sentence is an easier extraction target than a methods section.
+
+**Do not assume a tenant exists.** Benchling is enterprise-priced; UK academic
+groups more often run OneNote or paper. Whether the group has one, and whether
+the fibrin work is in it, is a five-minute question that gates everything below.
+
+**Governance, and the escape hatch already in the data model.** Colleagues'
+unpublished runs entering a shared benchmark is a priority-and-authorship
+conversation, not a donor-consent one — the IRAS covers the tissue and says
+nothing about this. But refute does not need anyone's notebook. It needs
+`p_detach_baseline_per_h`, which is a scalar. *"27 of 40 gels detached before
+day 7"* is one number, and shipping that number is categorically different from
+shipping the notebook.
+
+That has a code consequence, and it is the one thing here worth doing early.
+`Evidence` currently **requires** a `quote` — the sentence the number came from
+— and `provenance` tags every non-derived value `LITERATURE`. Both are wrong for
+this source:
+
+- The quote is the leak. A notebook sentence carries the experiment, the date,
+  and often the person.
+- The tag is an understatement. A number counted off primary records is
+  *stronger* evidence than one read out of a paper, not weaker.
+
+A `BenchlingSource` therefore needs a third provenance tag (`PRIMARY`), an
+opaque tenant-local identifier in place of a DOI, and a quote field that is a
+**count statement** (`"27/40 before 168 h"`) rather than a transcript. Make that
+change before any adapter exists, not after — otherwise the first working query
+is also the first leak.
+
+**The better product is write-back, not read.** Reading Benchling calibrates the
+twin once. *Writing* to Benchling puts the power calculation into the entry
+**before the plate is cast**, as a result row against the protocol. That makes
+refute part of the experimental record rather than a website someone visits —
+pre-registration by default, inside the tool the lab already opens every
+morning. It is also the only version of this a PI has an obvious reason to
+approve.
+
+### 13.2 BenchFlow — the collision §2 did not see
+
+§2 has the strategy right: BenchFlow is the harness layer, refute contributes
+the scorer, and being an environment is distribution. What §2 missed was a
+constraint that has since been **lifted** — see §13.4. Everything below now
+ships, including the twin:
+
+| Ships | Why |
+|---|---|
+| `tier0` | arithmetic over caller-supplied numbers; no constant of ours in it |
+| The blocked-constant dataset | claims about what the literature omits — that *is* the Track B deliverable |
+| `RefuteEnv` + `baselines` | code, not calibration |
+| The exp4 twin | ✅ owner is content to publish the results (2026-08-15) |
+
+**The architecture recommendation does not change, and why it does not is worth
+being precise about.** This section originally rested the
+host-behind-an-endpoint design on confidentiality: if entrants **download** the
+environment they have the constants, if they **call** it they do not. That leg
+is now gone. The other leg is untouched:
+
+> An agent that can read `twin.py` and `calibration.py` can overfit to the
+> equations instead of designing a good experiment. That is §9.1, and
+> publication permission does nothing to it.
+
+So keep the hosted endpoint — `api.py` exists and `/score` is keyless — but
+keep it **for Goodhart, not for secrecy**. Two independent arguments happened to
+want the same design; one has been retired and the design stands on the other.
+Do not carry the retired argument forward, and do not let "confidential" creep
+back into the pitch as a justification for something now justified differently.
+
+### 13.4 What "publishing the results" settles, and what it does not
+
+Owner decision, 2026-08-15: content to publish the results. Recorded with its
+reasoning, because the previous version of this plan got the *category* wrong.
+
+**What was wrong.** §5 treated this as governed by "the ethics approval and by
+publication priority". But look at what is actually in `cases/exp4/data/`:
+eighteen rows of per-well gel-area percentages by day. There is no
+donor-identifiable information in a fill-percentage timecourse, and the REC
+approval governs *use* of the waste tissue — which already happened, lawfully.
+Publishing this file was never an ethics question, and framing it as one
+overstated the constraint for eleven days.
+
+**What is actually left**, and it is one thing:
+
+- **Authorship and priority.** This is MPhil work supervised in the McCaskie
+  group. Publishing the constants and the 6/6 vs 0/4 split *is* publishing the
+  result, and the owner is not the only person with a stake in when and where
+  that happens. "I don't mind" settles one of the required yeses. Flag it to the
+  PI; this section does not do that for you.
+
+**Unblocked immediately:** the BenchFlow environment can carry the twin; the
+demo can quote the numbers without hedging; and the calibration becomes
+*checkable* by a third party — which materially strengthens a Track B "Build
+the Dataset" entry, since a dataset nobody can obtain is a weak dataset.
+
+**NOT authorised by this:** flipping the repository to public. That is a
+separate and irreversible action the owner has not asked for, and it releases
+far more than the results — this plan, the recorded agent runs, and every
+internal argument in it. Publishing findings and publishing a working
+repository are different releases. Ask before touching visibility.
+
+### 13.3 What this changes about the order
+
+Nothing, this weekend. Benchling gates on a tenant that may not exist and a
+permissions conversation that cannot be had at a hackathon. BenchFlow packaging
+is interface work worth nothing until the sweep says what the twin can honestly
+assert. Both are post-event.
+
+One exception, because it is ~15 lines and it is a correctness fix whether or
+not Benchling ever happens: the `PRIMARY` provenance tag and the count-statement
+quote. An evidence model that cannot express *"counted off primary records"* has
+a gap in it, and the fix is cheap while nothing depends on it yet.
+
+Sequence otherwise unchanged: **sweep first** (§12.4).
