@@ -1382,7 +1382,7 @@ this portable at all.
 
 ### 13.1 Benchling — the denominator
 
-The 36 constants `tier1.py` marks missing across its six scaffolds are not one
+The 35 constants `tier1.py` marks missing across its six scaffolds are not one
 kind of thing. They come in three shapes, and the distinction decides what any
 given source can supply:
 
