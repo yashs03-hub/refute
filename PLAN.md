@@ -1240,18 +1240,39 @@ is circular — a patient who dropped out has no outcome — but *differential*
 dropout between arms is visible at arm level, and arm membership stands in for
 the phenotype. That is the identical trick, one domain up.
 
-**What is not established, and should not be claimed:**
+**Probed against the live corpus, 2026-08-15.** Partially confirmed, and the
+decisive number is still missing.
 
-- Many CONSORT diagrams are images, not text. Extraction yield is untested.
-- Reasons for loss are often collapsed into a single number per arm, which gives
-  the rate but not the mechanism.
+*Established:*
+
+- Paperclip indexes trial records with a **first-class `Participant_flow`
+  section**, line-numbered and therefore citable in the same way a paper is.
+  This is better than parsing a PDF diagram — it is already sectioned text.
+- Per-arm allocation appears in prose and is directly readable, e.g.
+  `L494: A total of 502 screened participants were randomly assigned to receive
+  either AVT05 (251 participants) or EU-Simponi (251 participants).`
+- The path form is `/trials/tri_<id>/sections/<Name>.lines`. A `/papers/<uuid>/`
+  path taken from grep output does **not** resolve, and `cat` on it fails.
+
+*Not established, and the reason this stays a lead rather than a plan:*
+
+- **Prevalence is unmeasured.** `grep -c` returns a capped, approximate figure,
+  so "how many trial records carry a usable flow section" is still unknown. That
+  single number decides whether this is a research programme or a footnote.
+- The disposition detail is frequently referenced as **"Figure 6"** — so the
+  per-arm *reasons* for loss may be an image even when the allocation prose is
+  text. Allocation without reasons gives a rate and not a mechanism, which is
+  precisely the half tier 1 already has trouble with.
 - It unblocks the *data*, not the *modelling*. A twin still has to exist per
   clinical domain, and nothing here says that is cheap.
 
-Treat it as the most promising lead in the project, not a result. The next
-concrete step is small: pull twenty CONSORT diagrams and measure how often
-per-arm loss with reasons is machine-readable. That number decides whether this
-is a direction or a footnote.
+*Contract note for whoever picks this up:* `grep --from <id>` appears to be
+ignored — a scoped grep over a 3-paper result set returned matches across 50
+papers. Scope by path (`/trials/`) rather than trusting `--from`.
+
+The next step is unchanged and still small: sample twenty records with a
+`Participant_flow` section and count how many give per-arm loss **with reasons**
+as text rather than as a figure.
 
 ### 12.4 Build order for the event — sweep first, then build
 
