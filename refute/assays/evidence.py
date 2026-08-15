@@ -5,13 +5,14 @@ ordinary; establishing that a constant is *systematically absent* is a claim
 about publishing practice, and it is the claim this project rests on.
 
 So a failed lookup is not an empty result here - it is a typed one. The reason
-a constant could not be filled distinguishes four quite different situations,
+a constant could not be filled distinguishes six quite different situations,
 only one of which is about the literature:
 
     NOT_REPORTED       nobody publishes it. The survivorship class.
     UNITS_MISMATCH     published, but as a different quantity.
     ASSAY_SPECIFIC     published, but instrument-relative and not transferable.
     CONTEXT_DEPENDENT  the constant is ill-posed as a scalar.
+    NOT_SUPPLIED       nobody's to publish. The experimenter has not said.
     NOT_YET_SEARCHED   no claim either way. The honest default.
 
 NOT_YET_SEARCHED exists to stop the headline number being inflated by silence.
@@ -19,6 +20,16 @@ NOT_YET_SEARCHED exists to stop the headline number being inflated by silence.
 conclusions, and a dataset that conflates them is worthless for the argument it
 is meant to support - so `Blocked` refuses to claim NOT_REPORTED without
 recording the query that came back empty.
+
+NOT_SUPPLIED was added later, for the tier-0 quantities: effect size, within-arm
+SD, alpha, n per arm. None of them is a corpus quantity - no search could
+recover them, because they belong to the experimenter rather than to the
+literature. Before this existed they were being filed as ASSAY_SPECIFIC, which
+is not merely imprecise but false: it asserts something about publishing
+practice for a number no paper was ever going to carry. The taxonomy's job is
+to route to the right next action, and these three are genuinely different -
+NOT_REPORTED means run a pilot, NOT_YET_SEARCHED means go and look, and
+NOT_SUPPLIED means simply tell the tool the number. See `the_fix`.
 
 WHY `Provenance` LIVES HERE AND NOT IN `resolve`
 ------------------------------------------------
@@ -47,6 +58,7 @@ class BlockedReason(Enum):
     UNITS_MISMATCH = "units_mismatch"
     ASSAY_SPECIFIC = "assay_specific"
     CONTEXT_DEPENDENT = "context_dependent"
+    NOT_SUPPLIED = "not_supplied"
     NOT_YET_SEARCHED = "not_yet_searched"
 
     @property
@@ -57,6 +69,23 @@ class BlockedReason(Enum):
         the constant or the instrument and need no corpus to establish.
         """
         return self is BlockedReason.NOT_REPORTED
+
+    @property
+    def the_fix(self) -> str:
+        """What the reader should actually do about it.
+
+        The taxonomy earns its keep by routing to different actions, not by
+        being a tidy set of labels. If two reasons imply the same next step,
+        one of them is redundant.
+        """
+        return {
+            BlockedReason.NOT_REPORTED: "run a pilot - the literature does not have it",
+            BlockedReason.UNITS_MISMATCH: "convert it, and state the conversion",
+            BlockedReason.ASSAY_SPECIFIC: "measure it on your own rig",
+            BlockedReason.CONTEXT_DEPENDENT: "sweep it as a range rather than a point",
+            BlockedReason.NOT_SUPPLIED: "tell the tool the number",
+            BlockedReason.NOT_YET_SEARCHED: "search for it",
+        }[self]
 
 
 class Provenance(Enum):

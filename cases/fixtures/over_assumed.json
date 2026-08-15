@@ -46,42 +46,60 @@
       "units": "fill-points",
       "provenance": "assumed",
       "source": "FIXTURE:assumed - stand-in for an imaging precision nobody characterised",
-      "plausible_range": [1.0, 3.0]
+      "plausible_range": [
+        1.0,
+        3.0
+      ]
     },
     "measurement_bias_pct": {
       "value": 1.8,
       "units": "fill-points",
       "provenance": "assumed",
       "source": "FIXTURE:assumed - stand-in for a per-well systematic offset nobody characterised",
-      "plausible_range": [0.0, 3.0]
+      "plausible_range": [
+        0.0,
+        3.0
+      ]
     },
     "lysis_shape": {
       "value": 4.108,
       "units": "-",
       "provenance": "assumed",
       "source": "FIXTURE:assumed - no survival curve was available to fit a shape to",
-      "plausible_range": [1.0, 6.0]
+      "plausible_range": [
+        1.0,
+        6.0
+      ]
     },
     "lysis_scale_contractile_h": {
       "value": 183.7,
       "units": "h",
       "provenance": "assumed",
       "source": "FIXTURE:assumed - stand-in for time to lysis in the treated arm",
-      "plausible_range": [120.0, 260.0]
+      "plausible_range": [
+        120.0,
+        260.0
+      ]
     },
     "lysis_scale_quiescent_h": {
       "value": 494.5,
       "units": "h",
       "provenance": "assumed",
       "source": "FIXTURE:assumed - stand-in for time to lysis in the untreated arm",
-      "plausible_range": [300.0, 900.0]
+      "plausible_range": [
+        300.0,
+        900.0
+      ]
     },
     "aprotinin_hazard_scale": {
       "value": 4.0,
       "units": "x",
       "provenance": "assumed",
       "source": "FIXTURE:assumed - no antifibrinolytic arm existed in Experiment 4",
-      "plausible_range": [1.0, 10.0]
+      "plausible_range": [
+        1.0,
+        10.0
+      ]
     },
     "p_cast_failure": {
       "value": 0.0833,
@@ -94,16 +112,19 @@
       "units": "probability",
       "provenance": "assumed",
       "source": "FIXTURE:assumed - stand-in for a facility contamination rate",
-      "plausible_range": [0.0, 0.2]
+      "plausible_range": [
+        0.0,
+        0.2
+      ]
     },
     "effect_size": {
       "value": null,
-      "reason": "assay_specific",
+      "reason": "not_supplied",
       "queries_run": []
     },
     "within_arm_sd": {
       "value": null,
-      "reason": "assay_specific",
+      "reason": "not_supplied",
       "queries_run": []
     },
     "alpha": {
@@ -111,7 +132,10 @@
       "units": "probability",
       "provenance": "assumed",
       "source": "refute/tier0.py DEFAULT_ALPHA - conventional two-sided threshold, stated rather than inherited",
-      "plausible_range": [0.01, 0.05]
+      "plausible_range": [
+        0.01,
+        0.05
+      ]
     },
     "n_per_arm": {
       "value": 3.0,

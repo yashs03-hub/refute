@@ -100,22 +100,22 @@
     },
     "effect_size": {
       "value": null,
-      "reason": "assay_specific",
+      "reason": "not_supplied",
       "queries_run": []
     },
     "within_arm_sd": {
       "value": null,
-      "reason": "assay_specific",
+      "reason": "not_supplied",
       "queries_run": []
     },
     "alpha": {
       "value": null,
-      "reason": "assay_specific",
+      "reason": "not_supplied",
       "queries_run": []
     },
     "n_per_arm": {
       "value": null,
-      "reason": "assay_specific",
+      "reason": "not_supplied",
       "queries_run": []
     }
   },
