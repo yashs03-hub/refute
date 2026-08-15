@@ -16,7 +16,30 @@ honestly:
   2. leave an **empty alias map** as the single place layer 1's terms get bound
      to ours, so the agreement is a data change rather than a refactor,
   3. make the size of the gap **runnable** - `coverage_report()` prints what is
-     declared, what is bound, and what this side cannot say at all.
+     declared, what is bound, and what this side cannot say at all,
+  4. publish the part of the contract that is **already binding**, whether or
+     not anyone agrees to it - `units_contract_report()`.
+
+THE UNITS HALF IS NOT A GAP, IT IS AN UNPUBLISHED REQUIREMENT
+--------------------------------------------------------------
+Everything above is a vocabulary nobody has agreed. The unit strings are the
+opposite: `handoff.resolutions_from_findings` is enforcing them right now, and
+has been since it was written. It matches a `Finding` to a requirement only when
+the units are equal after normalisation, and it has no synonym table on purpose
+- an equivalence decided in the abstract is undetectable when it is wrong, and
+it fails by putting a confident number into a power calculation.
+
+That refusal is right, and it moves the cost onto whoever emits the findings. It
+is only payable if they are told what to emit, and until `units_contract_report`
+existed nothing anywhere said what the strings were. The failure mode is the
+quiet kind: not an exception, but a `ResolutionSet` reporting zero coverage,
+which is indistinguishable from a literature search that came back empty.
+
+So the report is generated, never written down. Every string in it is read from
+the same requirement set the matcher is handed, and the normalisation it
+documents is `handoff.normalise_units` itself rather than a description of it.
+A published contract that can disagree with the code enforcing it is worse than
+no published contract, because it will be trusted.
 
 WHAT THIS IS NOT
 ----------------
@@ -73,6 +96,8 @@ from types import MappingProxyType
 
 from .assays import REGISTRY
 from .assays.base import AssayProtocol
+from .handoff import READOUT_RELATIVE_UNITS, accepts_any_units, normalise_units
+from .requirements import tier0_needs, tier1_needs
 
 
 class Facet(Enum):
@@ -748,20 +773,277 @@ def coverage_report() -> str:
     return VOCABULARY.report()
 
 
+# =============================================================================
+# The units contract. Unlike everything above, this is already binding.
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class UnitContract:
+    """One requirement key and the exact unit string a finding must carry.
+
+    `protocols` is empty for a tier-0 key and that is not a missing value: tier 0
+    is assay-blind arithmetic, required by every design, and belongs to no
+    protocol. A reader has to be able to tell "every protocol" from "this one".
+
+    There is no `normalised` field. The normalised form is what the matcher
+    compares, not what layer 1 emits, and putting it beside `units` in a
+    published contract would invite somebody to emit it - at which point the
+    contract would have two right answers and one of them would be a lowercased
+    string nobody's instrument prints.
+    """
+
+    key: str
+    units: str
+    """Verbatim, from the requirement. This is the string to emit - except when
+    `any_units_accepted` is set, where it is the placeholder the requirement
+    declares rather than a unit anything is measured in."""
+
+    tier: str                       # "tier0" | "tier1"
+    protocols: tuple[str, ...]      # empty for tier 0; sorted otherwise
+    any_units_accepted: bool
+    """True for a requirement declared relative to the readout. See
+    `handoff.accepts_any_units`: it is a licence about absolute units, not about
+    consistency, and the readout-relative pair must still agree with each other.
+    """
+
+
+def unit_contract(
+    protocols: Iterable[AssayProtocol] | None = None,
+) -> tuple[UnitContract, ...]:
+    """Every requirement key with the unit string a finding has to match.
+
+    Read from `requirements.tier1_needs` and `requirements.tier0_needs` - the
+    same two functions the pipeline hands to the matcher - so the published
+    string cannot be one the matcher does not enforce. Nothing here is
+    transcribed, and there is no literal unit string anywhere in this module.
+
+    One record per distinct (key, units) pair rather than per key. Constant
+    names are shared across protocols, and if two of them ever declare one name
+    with different units that is a real ambiguity layer 1 has to be told about,
+    not something to resolve by picking the first.
+
+    Sorted tier 0 first, then by key, then by units, so a diff between two runs
+    reads as an insertion.
+    """
+    protocols = tuple(protocols if protocols is not None else REGISTRY.values())
+
+    seen: dict[tuple[str, str, str], list[str]] = {}
+    for protocol in protocols:
+        for req in tier1_needs(protocol):
+            seen.setdefault((req.tier, req.key, req.units), []).append(protocol.key)
+    for req in tier0_needs():
+        seen.setdefault((req.tier, req.key, req.units), [])
+
+    return tuple(
+        UnitContract(
+            key=key,
+            units=units,
+            tier=tier,
+            protocols=tuple(sorted(set(declared_by))),
+            any_units_accepted=accepts_any_units(units),
+        )
+        for (tier, key, units), declared_by in sorted(seen.items())
+    )
+
+
+def units_contract_report(
+    protocols: Iterable[AssayProtocol] | None = None,
+) -> str:
+    """The unit strings layer 1 must emit, as something to paste to them.
+
+    The companion to `coverage_report`, and the opposite kind of document. That
+    one reports an agreement that has not happened. This one reports a rule that
+    is already enforced by `handoff.resolutions_from_findings` and was, until
+    now, written down nowhere - so the only way to discover it was to emit a
+    finding, match nothing, and read zero coverage as an empty literature.
+    """
+    contract = unit_contract(protocols)
+    protocols = tuple(protocols if protocols is not None else REGISTRY.values())
+    tier0 = [c for c in contract if c.tier == "tier0"]
+    tier1 = [c for c in contract if c.tier == "tier1"]
+
+    lines: list[str] = []
+    out = lines.append
+
+    out("REFUTE - LAYER 2 UNIT STRINGS (ENFORCED, NOT PROPOSED)")
+    out("=" * 72)
+    keys = {c.key for c in contract}
+    out(
+        f"{len(protocols)} protocols, {len(keys)} requirement keys, "
+        f"{len(tier0)} of them tier 0."
+    )
+    if len(contract) != len(keys):
+        out(
+            f"{len(contract)} lines below: {len(contract) - len(keys)} of these "
+            f"keys are declared with more than one unit string."
+        )
+    out("")
+    out(_wrap(
+        "A finding fills a requirement only when its units equal the "
+        "requirement's exactly, after the normalisation below. There is no "
+        "synonym table and there will not be one: an equivalence decided in the "
+        "abstract by whoever wrote the table is undetectable when it is wrong, "
+        "and it fails by feeding a confident number into a power calculation "
+        "rather than by leaving a gap. Emit these strings verbatim."
+    ))
+    out("")
+    out(_wrap(
+        "Getting one wrong does not raise. The key stays NOT_YET_SEARCHED, the "
+        "ResolutionSet reports lower coverage, and the output is "
+        "indistinguishable from a search that found nothing - which is why this "
+        "is published rather than left to be discovered."
+    ))
+
+    if any(c.units.strip() == "-" for c in contract):
+        out("")
+        out(_wrap(
+            "A unit string of '-' is not a blank we forgot to fill. The quantity "
+            "is dimensionless - a shape parameter, a coupling - and '-' is the "
+            "string to emit; 'dimensionless', 'unitless' and the empty string "
+            "will not match it. A finding carrying a value must carry units, so "
+            "the empty string is not available anyway."
+        ))
+
+    out("")
+    out("WHAT IS NORMALISED AWAY BEFORE THE COMPARISON")
+    out("-" * 72)
+    out(_wrap(
+        "Lowercased, stripped, and internal runs of whitespace collapsed to one "
+        "space. Nothing else is done to either side.",
+        indent="    ",
+    ))
+    out("")
+    for example in ("  Probability ", "AU  per % strain", "FRACTION"):
+        out(f"        {example!r:<20} -> {normalise_units(example)!r}")
+    out("")
+    out(_wrap(
+        "So these pairs do NOT match, and each one is a decision somebody would "
+        "otherwise have to make silently: um / µm, % / percent, fraction / "
+        "probability, h / hours, x / fold. If one of them should match, say so "
+        "and it becomes a change to the registry's declared units, visible to "
+        "both sides - not an entry in a table on ours.",
+        indent="    ",
+    ))
+
+    out("")
+    out("TIER 0 - REQUIRED BY EVERY DESIGN, NO PROTOCOL")
+    out("-" * 72)
+    _out_keys(out, tier0)
+    if any(c.any_units_accepted for c in tier0):
+        out("")
+        out(_wrap(
+            "* declared in terms of the readout rather than absolutely, because "
+            "the arithmetic uses only the ratio of effect to spread. The string "
+            "shown is that placeholder, not a unit: emit the readout's real "
+            "units instead, and the SAME string for both. Any units are "
+            "accepted, and in exchange these two must agree with each other - a "
+            "difference in microns over a spread in pascals is not a "
+            "standardised effect size, so if they disagree neither is used.",
+            indent="    ",
+        ))
+
+    out("")
+    out("TIER 1 - PER PROTOCOL")
+    out("-" * 72)
+    for protocol in sorted(protocols, key=lambda p: p.key):
+        out(protocol.key)
+        _out_keys(out, [c for c in tier1 if protocol.key in c.protocols])
+        out("")
+
+    shared = _shared_keys(tier1)
+    out("THE SAME KEY IN MORE THAN ONE PROTOCOL")
+    out("-" * 72)
+    if not shared:
+        out("    (none - every tier-1 key is declared by exactly one protocol)")
+    for key, records in shared:
+        agreed = len({c.units for c in records}) == 1
+        out(f"    {key}{'' if agreed else '   *** TWO UNIT STRINGS ***'}")
+        for record in records:
+            out(f"        {record.units:<22} {', '.join(record.protocols)}")
+    if any(len({c.units for c in records}) > 1 for _, records in shared):
+        out("")
+        out(_wrap(
+            "A key declared with two unit strings is one name for two "
+            "quantities. Which one a finding fills depends on which protocol is "
+            "being designed for, so it cannot be answered here - raise it.",
+            indent="    ",
+        ))
+    out("")
+
+    out("WHERE THESE COME FROM")
+    out("-" * 72)
+    out(_wrap(
+        "Tier 1 is `Constant.units`, read through `requirements.tier1_needs`. "
+        "Tier 0 is `requirements.tier0_needs`. Both are the functions the "
+        "pipeline hands to the matcher, so this report cannot state a string the "
+        "matcher does not enforce; the normalisation above is "
+        "`handoff.normalise_units` called on the examples, not a description of "
+        "it. Regenerate rather than quote.",
+        indent="    ",
+    ))
+    out("")
+    out(_wrap(
+        "Units are necessary and not sufficient. A finding also has to name the "
+        "requirement key as a whole term in its `statement`, and name exactly "
+        "one - `handoff` refuses a statement naming two, because which quantity "
+        "the number belongs to is then undecidable.",
+        indent="    ",
+    ))
+    return "\n".join(lines)
+
+
+def _out_keys(out: Callable[[str], None], records: list[UnitContract]) -> None:
+    if not records:
+        out("    (none)")
+        return
+    width = max(len(c.key) for c in records)
+    units_width = max(len(c.units) for c in records)
+    for record in records:
+        line = f"    {record.key:<{width}}   {record.units:<{units_width}}"
+        if record.any_units_accepted:
+            line += "   any units accepted *"
+        out(line.rstrip())
+
+
+def _shared_keys(
+    tier1: list[UnitContract],
+) -> list[tuple[str, list[UnitContract]]]:
+    """Tier-1 keys more than one protocol declares, with every unit string.
+
+    Both halves matter to a reader on the other side: a name used by three
+    protocols in the same units is one term they only have to learn once, and a
+    name used in two different units is a trap.
+    """
+    by_key: dict[str, list[UnitContract]] = {}
+    for record in tier1:
+        by_key.setdefault(record.key, []).append(record)
+    return [
+        (key, records)
+        for key, records in sorted(by_key.items())
+        if sum(len(r.protocols) for r in records) > 1
+    ]
+
+
 __all__ = [
     "ALIASES",
     "FACETS",
+    "READOUT_RELATIVE_UNITS",
     "VOCABULARY",
     "Derivation",
     "Facet",
     "FacetSpec",
     "Term",
     "UnboundTermError",
+    "UnitContract",
     "Vocabulary",
     "coverage_report",
     "normalise",
+    "normalise_units",
     "require_term",
     "terms",
     "translate",
     "unbound_terms",
+    "unit_contract",
+    "units_contract_report",
 ]

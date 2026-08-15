@@ -366,13 +366,15 @@ def test_tier0_keys_do_not_enter_the_version():
 
 
 def test_an_assay_with_no_recorded_report_is_not_an_error():
-    """Three of the six tier-1 scaffolds have never been attempted, and
-    `literature.NOT_ATTEMPTED` lists them rather than omitting them so the
-    denominator stays honest. The resolver agrees: nobody looked, which is a
-    true statement the gate knows how to route."""
+    """Every tier-1 scaffold has now been swept at least once, so
+    `literature.NOT_ATTEMPTED` is an empty tuple rather than a live example -
+    this test pins the underlying behaviour directly, by injecting an empty
+    report set, instead of resting on a corpus fact that has since changed.
+    An assay with no recorded report is not an error: nobody looked, which is
+    a true statement the gate knows how to route."""
     protocol = get("fibrosis_on_chip")
     requirements = requirements_for(protocol)
-    rs = RecordedResolver().resolve("fibrosis_on_chip", requirements)
+    rs = RecordedResolver(reports={}).resolve("fibrosis_on_chip", requirements)
 
     assert rs.unsearched() == sorted(r.key for r in requirements)
     assert not rs.complete

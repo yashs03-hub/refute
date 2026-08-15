@@ -22,12 +22,12 @@ has to accept the agreement without any other behaviour moving.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import replace
 
 import pytest
 
 from refute.assays import REGISTRY
-from refute.assays.base import AssayProtocol
+from refute.assays.base import AssayProtocol, ScopeTerm
 from refute.vocabulary import (
     ALIASES,
     FACETS,
@@ -363,16 +363,16 @@ def test_an_alias_may_not_be_rebound_silently():
 # --- 6. the facets that are absent today -------------------------------------
 
 
-@dataclass(frozen=True)
-class _ProtocolWithSpecies(AssayProtocol):
-    """What `AssayProtocol` would look like once the agreement adds a species."""
+def _with_species(protocol: AssayProtocol, species: str) -> AssayProtocol:
+    """Populate the real field.
 
-    species: str = ""
-
-
-def _with_species(protocol: AssayProtocol, species: str) -> _ProtocolWithSpecies:
-    values = {f.name: getattr(protocol, f.name) for f in fields(protocol)}
-    return _ProtocolWithSpecies(**values, species=species)
+    This helper used to build a forward-looking `AssayProtocol` subclass that
+    added a `species` field, because the field did not exist. It exists now, so
+    the subclass would shadow the thing under test and `replace` is both
+    simpler and a stricter check — it exercises the field `vocabulary` will
+    actually read rather than a stand-in shaped like it.
+    """
+    return replace(protocol, species=ScopeTerm(species, "NCBITaxon:10090"))
 
 
 def test_species_tissue_and_cell_type_are_absent_rather_than_guessed():

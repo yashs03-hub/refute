@@ -85,7 +85,6 @@ as a caveat and the gate is not allowed to route on.
 
 from __future__ import annotations
 
-import hashlib
 from typing import Iterable, Mapping
 
 from .assays.evidence import (
@@ -96,7 +95,7 @@ from .assays.evidence import (
     Provenance,
 )
 from .assays.literature import REPORTS
-from .requirements import VERSION_CHARS
+from .digest import requirement_digest
 from .resolve import Requirement, Resolution, ResolutionSet
 
 __all__ = [
@@ -328,11 +327,13 @@ def _version_of(requirements: tuple[Requirement, ...]) -> str:
     declared constants, which are tier 1 by construction. Tier 0 is assay-blind
     and belongs to no protocol's version.
 
-    The hash is duplicated from `requirements.py` rather than shared, because
-    the function there takes an `AssayProtocol` and this has only the list.
-    `tests/test_adapt.py` pins the two against each other for every protocol in
-    the registry, so the duplication cannot drift unnoticed.
+    The algorithm is `digest.requirement_digest`, shared with `requirements` and
+    `handoff`; it used to be a third copy of the same six lines here, because
+    the function in `requirements.py` takes an `AssayProtocol` and this has only
+    the list. Sharing the hash does not reintroduce that coupling - what is
+    shared is how a key list becomes a digest, and *which* keys are hashed stays
+    the caller's, which is the part that had to stay separate.
+    `tests/test_adapt.py` still pins this against the registry for every
+    protocol, and `tests/test_contract.py` pins all three paths together.
     """
-    keys = sorted(r.key for r in requirements if r.tier == "tier1")
-    digest = hashlib.sha256("\n".join(keys).encode("utf-8")).hexdigest()
-    return digest[:VERSION_CHARS]
+    return requirement_digest(r.key for r in requirements if r.tier == "tier1")

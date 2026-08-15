@@ -12,10 +12,33 @@ because the corpus was too small but because it exposes abstracts. The
 constants live in methods and troubleshooting sections. Swapping the source is
 therefore the whole experiment, so it needs to be a swap and not a rewrite.
 
-STATUS: `PaperclipSource` is written against the published CLI contract and has
-never been run - no credential exists yet. Its command construction is unit
-tested; its output parsing is not, and cannot be until a key is available. Any
-failure on the day should be suspected here first.
+STATUS - CORRECTED 2026-08-16
+-----------------------------
+This block used to read: *"`PaperclipSource` is written against the published
+CLI contract and has never been run - no credential exists yet. Its command
+construction is unit tested; its output parsing is not, and cannot be until a
+key is available."* Every clause of that is now false. It is quoted rather than
+deleted because the way it turned out false is the useful part: the published
+contract was wrong in three places, and nothing but running it would have found
+them.
+
+What is true instead, verified 2026-08-16: the CLI is installed, the credential
+resolves, `available` returns True, and a live search returns hits. Output
+parsing is tested against captured real CLI output - see `REAL_SEARCH_OUTPUT` in
+`tests/test_calibration_harness.py` - and specifically not against the JSON
+shape the contract implied, because that shape does not exist. The three
+divergences are recorded in the comment above `DEFAULT_SOURCES`.
+
+The warning it carried still applies, narrowed: suspect this file first when a
+live run misbehaves, because it is the one place a text format from someone
+else's tool is being read.
+
+WHAT AVAILABILITY IS NOT
+------------------------
+A working source is not a calibration. `refute calibrate` still replays
+`literature.py` and says so in its own header; live evidence comes from
+`refute search`. Do not read "paperclip: available" as "the constants were
+found".
 """
 
 from __future__ import annotations

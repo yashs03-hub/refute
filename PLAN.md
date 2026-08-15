@@ -11,6 +11,28 @@ was wrong: `refute` evaluates agents that automate a workflow rather than being
 one, whereas Track B's brief — facts that "sit one line at a time across
 thousands of papers" — is the §6 calibration almost verbatim.
 
+> **Added 2026-08-16 — this repository is now layer 2 of a two-layer system.**
+> The agreement with the other builder is `15 - SPEC - the whole system.md`.
+> Layer 1 answers everything about a hypothesis that can be answered without a
+> bench — the data and the literature, to exhaustion — and either stops, or hands
+> over the residual it could not settle. **Layer 2, this repository, designs the
+> experiment for that residual.** The seam in code is `HANDOFF.md`, and it is
+> built: `handoff.py`, `intake.py`, `resolve.py`, `requirements.py`, `gate.py`,
+> `pipeline.py`.
+>
+> Nothing below is invalidated by this — the twin, the scorer, the tiers and the
+> Track B argument are all layer 2's internals and the SPEC says explicitly that
+> they are layer 2's business. What changed is the *entry point*: designs no
+> longer arrive only as prose from a user, they arrive as a residual from a layer
+> that has already ruled things out. Two consequences the SPEC is emphatic about
+> and this plan did not previously state: **"looked and it is not there" must
+> stay distinguishable from "have not looked"** at the boundary as well as
+> inside, and **the shared biological vocabulary is unagreed** — `vocabulary.py`
+> declares this side's half and prints the gap.
+>
+> `INTEGRATION.md` predates the agreement and carries a superseded banner.
+> `BUILD.md` is layer 1's build plan and is partly superseded by SPEC §8.
+
 ---
 
 ## 0. State
@@ -31,11 +53,28 @@ thousands of papers" — is the §6 calibration almost verbatim.
 | `record.py` — serialise and replay an agent run | ✅ done — the demo no longer needs a network |
 | First recorded run — `cases/exp4/runs/gpt-5.5-high.json` | ✅ done, and it broke four things (§10). gpt-5.5 **declined to run the experiment**, correctly, and the scorer gave it 0% until fixed |
 | `extraction_cases.py` — 5 adversarial designs, known specs | ✅ done, and **5/5 pass live** |
-| `tests/` — 186 passing, 5 live-only skipped | ✅ done |
-| `cli.py` — `baseline` · `baselines` · `sweep` · `assays` · `calibrate` · `check-extraction` · `replay` · `providers` · `run` | ✅ done |
-| Calibrating the six tier-1 scaffolds | ⬜ harness built; **blocked on Paperclip credential — see §6, §7.1** |
+| `tests/` | ✅ green. ⚠️ **Corrected 2026-08-16** — this row read "186 passing, 5 live-only skipped". It is several hundred more than that and the number moves hour to hour as work lands, so **run `python -m pytest -q`; do not quote a figure from this table** |
+| `cli.py` — `baseline` · `baselines` · `sweep` · `tier0` · `harnesses` · `demo` · `assays` · `calibrate` · `check-extraction` · `replay` · `chat` · `infer` · `advise` · `route` · `search` · `providers` · `run` | ✅ done. ⚠️ **Corrected 2026-08-16** — eight subcommands were missing from this row: `tier0`, `harnesses`, `demo`, `chat`, `infer`, `advise`, `route`, `search` |
+| Calibrating the six tier-1 scaffolds | 🟡 **in progress.** ⚠️ **Corrected 2026-08-16** — this read "blocked on Paperclip credential". The credential exists and works (§6.3), and the Track B sweep is running now. Not done: no scaffold has cleared `require_runnable()` yet |
+
+**Landed 2026-08-15, and absent from the table above until 2026-08-16.** The
+downstream half of the two-layer pipeline. Each is tested; none needs a network.
+
+| Component | Status |
+|---|---|
+| `resolve.py` — `Requirement`, `Resolution`, `ResolutionSet`, the resolver seam | ✅ done. Invariants enforced at construction, not documented — see `HANDOFF.md` §2a |
+| `requirements.py` — what a verdict depends on, read off the registry | ✅ done. The list is exogenous to the thing filling it, which is the property the whole split rests on |
+| `gate.py` — `route_design` → `TIER1` · `TIER0` · `OUT_OF_SCOPE` · `REFUSE` · `NOT_READY` | ✅ done, and value-blind: it never dereferences a number, pinned by a tripwire test |
+| `pipeline.py` — resolve → gate → simulate \| tier 0 → advise, with a per-stage narrative | ✅ done |
+| `adapt.py` — the recorded literature findings crossing into a `ResolutionSet` | ✅ done. This is what lets the downstream half run on real recovery rates instead of on fixtures |
+| `handoff.py` — layer 1's `Handoff` / `Finding` / `OpenItem`, and their crossing | ✅ done. Trace ids now survive it — `Resolution` gained `origin_event` 2026-08-16. The divergence note inside `handoff.py` still calls that gap open and has not caught up |
+| `intake.py` — residual prose → assay choice + `DesignSpec` | ✅ done. Assay selection is deterministic, no model call. Nobody had owned this step |
+| `vocabulary.py` — this side's declared terms | 🟡 **deliberately unfinished.** The alias map is empty and three of six facets are undeclared, because the vocabulary must be agreed with layer 1 before either side hardcodes. `coverage_report()` prints the size of the gap. **Do not cite it as an agreement** |
+| `cases/fixtures/` — seven hand-written resolution sets | ✅ done. Simultaneously the gate's test matrix and the resolver's output spec |
+| `NOT_SUPPLIED` blocked reason | ✅ added 2026-08-15, as a correction: the tier-0 quantities were being filed as `ASSAY_SPECIFIC`, which asserts something about publishing practice for numbers no paper was ever going to carry |
+| Per-tier calibration reporting | ✅ done — `refute calibrate` splits *what the assay measures* from *how the assay breaks*, which is the asymmetry stated as a measurement |
 | Optimizer — cheapest design meeting a power target | ⬜ not started; `sweep` is a grid, not a search. **Goodhart applies once it lands — §9.1** |
-| Record a real agent run to `cases/exp4/runs/` | ⬜ infrastructure done; **needs one paid run — the only step left on §7.1 item 4** |
+| Record a real agent run to `cases/exp4/runs/` | ✅ **done — corrected 2026-08-16.** This row said "needs one paid run", contradicting §7.1 item 4 and the row above it. `gpt-5.5-high.json` is committed and replays. What is genuinely still missing is narrower: that recording's final round **declined**, so it carries no scoreable revised design. A second run whose revision assigns wells is what would let the superseded ~57 be recomputed |
 | Second case (qPCR artifact) | ⬜ not started — needs owner's go-ahead |
 | Uncertainty propagation over calibration params | 🟡 partial — ASSUMED constants swept at scoring time (§9.1); FITTED ones not yet |
 | Proto integration | ❌ **resolved: do not build** — Proto is sequence-typed (§2) |
@@ -60,6 +99,14 @@ that verdict is the finding.
 > cannot be recalculated: this is precisely the cost of §7.1 item 4 being
 > outstanding. **Quote 9% power and 0% → 97% testable, which are unaffected; do
 > not quote 57 until the run is replayed.**
+>
+> *Clarified 2026-08-16 — the conclusion is unchanged, the stated reason was
+> imprecise.* The committed recording **does** serialise an extracted spec per
+> round. The reason 57 still cannot be recomputed is that the run which produced
+> it was attempt 2, which was never recorded, and the run that was recorded is
+> attempt 3, whose revised round **declined and assigns no wells** (§10.3). So
+> there is no revised design to re-score, and replaying the recording reports
+> round 1 at ~49 wells/arm and a decline at the end. **Still do not quote 57.**
 >
 > The finding itself is untouched. `refute baselines` now demonstrates it more
 > directly than the agent run does: `EXPERT`, hand-written with full hindsight,
@@ -247,6 +294,10 @@ working artefact that motivates it and gives the dataset a use.
    before the event. No credential is available locally (checked), so only
    *model quality* should remain untested — a plumbing bug must not eat the
    Saturday.
+   ⚠️ **Corrected 2026-08-16:** "no credential is available locally" is no longer
+   true of Paperclip — it is installed and a live search returns hits (§6.3). The
+   reasoning still stands for the *model* credential, which is what this item was
+   about.
 2. **Run `agent.py` end to end once** on the event's Claude credits. Extraction
    fidelity is the most likely failure point: if the extractor mis-reads a
    design, the twin scores the wrong plate and it looks like the agent's fault.
@@ -329,7 +380,7 @@ working artefact that motivates it and gives the dataset a use.
 | Track B entry is judged as a literature-mining exercise | Lead with the absence, not the extraction. The dataset's value is which constants are *missing* and the pattern in which ones — a claim about publishing practice that no single paper can support |
 | Judged as sitting out the safety conversation the week AI-designed phages hit the news | §8. The architecture already takes a position — generator never verifies itself, fails closed, silence is not evidence — and took it before the news. Reframe, do not pivot; the reasons not to pivot are recorded so they are not re-argued on the day |
 | ~~Public presentation is a patent disclosure~~ | ✅ **RETIRED 2026-08-10 — no patent.** Decided deliberately, not defaulted into. The method can be presented, written up and open-sourced without restriction |
-| ~~Conflating "no patent" with "the data can go public"~~ | ✅ **RETIRED 2026-08-15 — owner is content to publish the results.** Recorded because the reasoning changed, not just the answer: see §13.4. The remaining gate is authorship, not ethics, and it is not the owner's alone |
+| ~~Conflating "no patent" with "the data can go public"~~ | ✅ **RETIRED 2026-08-15 — owner is content to publish the results.** Recorded because the reasoning changed, not just the answer: see §13.4. ~~The remaining gate is authorship, not ethics, and it is not the owner's alone~~ — **cleared by the owner 2026-08-15**, recorded in `cases/exp4/PROVENANCE.md`. No open gate remains on the data or the results. Repository *visibility* is a separate decision and has not been taken |
 
 ---
 
@@ -385,7 +436,7 @@ indexes 11M+ papers in **full text**, and two of its five tools match the task:
 | Tool | Use here |
 |---|---|
 | `grep` | Regex across full texts, sub-second via trigram index. Searches for the *shape* of a number — "mortality" near "%" near "bleomycin" — rather than hoping an abstract mentions it |
-| `map` | Parallel AI analysis across many papers: "extract the delamination rate from each of these 200 methods sections" |
+| `map` | ⚠️ **Not available — corrected 2026-08-16.** Gated to GXL testers; it errors on this account. The plan assumed `map` would do the bulk extraction, and it cannot. `grep` carries it instead, which §6.3 argues is the better tool regardless |
 
 Also `search` (hybrid BM25 + vector), `lookup` (DOI/PMID metadata), `sql`
 (read-only over the documents table).
@@ -393,10 +444,30 @@ Also `search` (hybrid BM25 + vector), `lookup` (DOI/PMID metadata), `sql`
 Each of the six protocols already carries a `paperclip_query`, written when the
 scaffolds were built. They are the shopping list; nothing new needs designing.
 
-### 6.3 Access — user action required
+### 6.3 Access — ~~user action required~~ **DONE 2026-08-15, verified 2026-08-16**
 
-Self-serve, not gated to the hackathon. Per the standing rule, **the credential
-is created and exported by the user, never written on their behalf**:
+> ✅ **The credential exists and works.** `paperclip` is on `PATH`,
+> `PaperclipSource.available` returns True, and `refute search --key
+> bleomycin_lung` returns real hits from PMC. This section stayed on the
+> pre-flight list as the last open owner action; it is closed.
+>
+> **What running it changed, which is the part worth keeping.** The published
+> contract was wrong in three places, and only having a key found them:
+> `search` **requires** `-s/--source` and errors without it; `--json` is accepted
+> and silently ignored, so the output is human text and not the JSON shape the
+> parser originally assumed; and `map` — the tool §6.2 below expects to do the
+> bulk extraction — is **gated to GXL testers and errors on this account**.
+> `grep` is not gated and is the better instrument anyway: a failure rate is
+> easier to find by its shape than by its topic. See the comment above
+> `DEFAULT_SOURCES` in `assays/sources.py`.
+>
+> **What it did not change.** A working source is not a calibration.
+> `refute calibrate` still replays the recorded findings and says so in its own
+> header. Live evidence comes from `refute search`.
+
+The instructions are kept below because they are still how the next person gets
+a key. Self-serve, not gated to the hackathon. Per the standing rule, **the
+credential is created and exported by the user, never written on their behalf**:
 
 ```bash
 # either — OAuth, no key handling
@@ -412,6 +483,11 @@ using an `X-API-Key` header, if calling it as a tool is preferable to shelling
 out.
 
 ### 6.4 The harness to build (does not need the credential)
+
+✅ **All four built** (§7.1 item 1). Item 3's taxonomy has since gained a sixth
+reason, `NOT_SUPPLIED` — see `HANDOFF.md` §2a for why that was a correction and
+not an addition. Kept as written because it is the specification the harness was
+built against.
 
 1. **Pluggable calibration source.** `assays/sources.py` — an interface with
    Paperclip and PubMed backends, so the protocol's existing `paperclip_query`
@@ -447,8 +523,30 @@ than a shortfall. The prediction, recorded in advance so it can be wrong:
 - `fibrosis_on_chip` is the least likely: device failure rates are commercially
   sensitive and n per condition is rarely stated
 
-If that prediction holds, the calibration run *is* a result about the
-literature, not merely a step towards a second case.
+**Outcome, 2026-08-16, all six scaffolds swept.** The prediction was
+directionally right and specifically wrong in one place worth recording rather
+than glossing over. The asymmetry holds as a strong tendency, not an absolute:
+of the failure/attrition constants across all six scaffolds, four were
+recovered rather than zero — `mortality_by_day14` (`bleomycin_lung`, exactly
+as predicted — welfare reporting), `p_seeding_failure` (`fibrosis_on_chip`,
+the scaffold predicted *least* likely to calibrate, from a stated QC yield
+fraction), and `modulus_drift_pct_per_day` plus `drift_depends_on_nominal`
+(`stiffness_drift`, from a 42-day rheology time course, Scott 2020,
+10.1002/adhm.201901593). `tests/test_calibration_harness.py::
+test_the_asymmetry_holds_in_the_current_record` pins the four by name.
+
+The `stiffness_drift` result carries a second finding: the paper that supplied
+the drift rate also states the drift depends on the presence of encapsulated
+cells, which — if it transfers from that paper's 3D degradable PEG geometry to
+this scaffold's 2D polyacrylamide — would mean `stiffness_drift`'s hazard is
+coupled to the measured phenotype rather than driven only by time and medium
+composition as `HazardSpec` currently declares. Not acted on; flagged in
+`refute/assays/findings/stiffness_drift.py` for a human call, because it
+crosses material and geometry and should not be absorbed silently.
+
+So the calibration run *is* a result about the literature, and the interesting
+part is not that the asymmetry held — it mostly did — but the three specific,
+checkable places it did not.
 
 ### 6.6 How this scales — tier cases by defect, not by domain
 
@@ -502,16 +600,27 @@ needing none of those should be finished before boarding.
 
 ### 7.1 Pre-flight (by 14 Aug)
 
+**Closed 2026-08-16.** All six items are done; item 2 was the last one and it was
+the only one that needed anybody other than the author.
+
 | # | Item | Why it cannot wait |
 |---|---|---|
 | 1 | Calibration harness — `evidence.py`, `sources.py`, `literature.py`, `refute calibrate` | ✅ done. Paperclip is now a credential away, not a build |
-| 2 | **Paperclip credential, and the six queries run once** | ⬜ **OWNER ACTION.** If `grep`/`map` behave unlike the docs, find out now, not on the 15th. `PaperclipSource.parse` is written against an unverified schema and is the first thing to suspect. This is what makes Track B a submission rather than a case study |
+| 2 | **Paperclip credential, and the six queries run once** | ✅ **DONE 2026-08-15, verified 2026-08-16.** The worry was right: `grep`/`map` did behave unlike the docs — `map` is gated and unusable, `--json` is ignored, `search` requires `-s`. `PaperclipSource.parse` was indeed written against a schema that does not exist and has been rewritten against captured real output. This was the last open owner action on the pre-flight list. See §6.3 |
 | 3 | **Adversarial extraction set** — 5 designs, known specs | ✅ **done, 5/5 pass live** (`refute check-extraction`). Probes units, negation, distractor reagents, implicit knowledge, and out-of-scope recording. Extraction is no longer a possible explanation for any number here |
 | 4 | **Pre-record an agent run** | ✅ **done** — `cases/exp4/runs/gpt-5.5-high.json`, committed and replayable with no network. Took three attempts and broke four things; see §10. The recording is now a test fixture |
 | 5 | Decide the patent question | ✅ **DECIDED 2026-08-10: no patent.** Nothing to protect, so presenting, publishing and open-sourcing the method are all unconstrained. Do not re-open this on the day. ⚠️ This resolves *patents only* — see §5 on the data, which is a separate question |
 | 6 | Baselines, so a score has a scale | ✅ done. `refute baselines` — and `EXPERT` at 9% is now the cleanest statement of the finding, with no model in the loop (§9.6) |
 
 ### 7.2 Day 1 (Sat) — build the dataset
+
+> **Status 2026-08-16: the sweep is IN PROGRESS, not done.** Five agents are
+> searching now. No result is recorded here yet, and none should be quoted until
+> one is. The morning item below — credential live, queries run — is done; the
+> classification is what is running.
+>
+> ⚠️ The afternoon item said bulk extraction via `map`. `map` is gated and
+> unusable on this account (§6.3), so the sweep runs on `search` + `grep`.
 
 **Scale past the six.** Six assays and 35 constants is a case study. Track B
 asks for "the pattern no single paper could show you", which needs a corpus:
@@ -1283,8 +1392,15 @@ data arrives before the decision it informs.
 
 #### Phase 1 — the sweep (do this first, ~1 hour, no code)
 
-Run `refute search` and `refute infer` across the **five uncalibrated
-scaffolds**. For every one of the 35 missing constants, record one of:
+> **Status 2026-08-16: IN PROGRESS.** Five agents are searching. Neither of the
+> two numbers below exists yet. Do not present the sweep as a result until it
+> is one.
+
+Run `refute search` and `refute infer` across the ~~five~~ **six uncalibrated
+scaffolds** — *corrected 2026-08-16: there are six, and the 35 constants below
+are their sum (6 + 7 + 6 + 6 + 6 + 4). The "four" in Phase 3 is a different and
+correct count: the phenotype-coupled subset.* For every one of the 35 missing
+constants, record one of:
 
 | outcome | meaning |
 |---|---|
@@ -1506,11 +1622,19 @@ overstated the constraint for eleven days.
 
 **What is actually left**, and it is one thing:
 
-- **Authorship and priority.** This is MPhil work supervised in the McCaskie
+- ~~**Authorship and priority.** This is MPhil work supervised in the McCaskie
   group. Publishing the constants and the 6/6 vs 0/4 split *is* publishing the
   result, and the owner is not the only person with a stake in when and where
   that happens. "I don't mind" settles one of the required yeses. Flag it to the
-  PI; this section does not do that for you.
+  PI; this section does not do that for you.~~
+
+  ✅ **CLEARED by the owner 2026-08-15**, recorded in `cases/exp4/PROVENANCE.md`
+  and reflected here 2026-08-16. The data may be used and the results published.
+  **No open gate remains on the data or the results.** The paragraph above is
+  kept struck through rather than deleted, because it took two corrections to
+  arrive here — first the category was wrong (ethics, when it was never an
+  ethics question), then the residue was cleared — and the sequence is the
+  useful record.
 
 **Unblocked immediately:** the BenchFlow environment can carry the twin; the
 demo can quote the numbers without hedging; and the calibration becomes

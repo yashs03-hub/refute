@@ -86,6 +86,17 @@ class Resolution:
     # -- blocked --
     reason: BlockedReason | None = None
     queries_run: tuple[str, ...] = ()
+    # -- provenance of the record itself, not of the number --
+    # The trace id of the event that produced this entry. `Finding` and
+    # `Handoff` both carry one and `Resolution` did not, so the chain ended
+    # exactly here - at the point a number stops being evidence and starts
+    # being an input the gate routes on. That is the worst place to lose it:
+    # every question worth asking about a verdict ("where did this variance
+    # come from, and did anybody search for it") is a question about the entry
+    # the verdict was computed from. Additive and defaulted, so a resolver that
+    # does not trace is unaffected and nothing that already reads this type has
+    # to change.
+    origin_event: str = ""
 
     def __post_init__(self) -> None:
         if self.value is not None and self.reason is not None:
@@ -227,6 +238,10 @@ def resolution_from_dict(key: str, d: dict) -> Resolution:
         plausible_range=tuple(rng) if rng else None,
         reason=BlockedReason(d["reason"]) if d.get("reason") else None,
         queries_run=tuple(d.get("queries_run", ())),
+        # Read back when a fixture carries one, so a resolution replayed from
+        # disk still points at the event that produced it. Absent from every
+        # fixture written so far, which is what the default is for.
+        origin_event=d.get("origin_event", ""),
     )
 
 
