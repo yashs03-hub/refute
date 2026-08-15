@@ -114,6 +114,57 @@ def cmd_assays(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_search(args: argparse.Namespace) -> int:
+    """Query a live corpus. The one path that actually hits the network.
+
+    Separate from `calibrate` on purpose: calibrate reports what has been
+    recorded, this produces new evidence. Conflating them is how a replayed
+    result gets presented as a fresh one.
+    """
+    from .assays import REGISTRY
+    from .assays.sources import PaperclipSource
+
+    src = PaperclipSource()
+    if reason := src.why_unavailable():
+        _print("UNAVAILABLE", reason)
+        return 2
+
+    if args.key:
+        protocol = REGISTRY.get(args.key)
+        if protocol is None:
+            _print("UNKNOWN", f"no protocol '{args.key}'. Try `refute assays`.")
+            return 2
+        query = protocol.paperclip_query or protocol.name
+        header = f"{args.key}: {query}"
+    else:
+        query = args.query
+        header = query
+
+    try:
+        hits = src.search(query, limit=args.limit)
+    except (RuntimeError, ValueError) as exc:
+        # A contract break must be loud. Reporting zero hits here would read as
+        # "the literature is silent", which is the project's headline claim.
+        _print("SEARCH FAILED", f"{type(exc).__name__}: {exc}")
+        return 2
+
+    lines = [f"query : {header}", f"hits  : {len(hits)}", ""]
+    for h in hits:
+        lines.append(f"  {h.source}")
+        if h.title:
+            lines.append(f"    {h.title[:88]}")
+        if h.snippet:
+            lines.append(f"    \"{h.snippet[:150]}\"")
+        lines.append("")
+    lines.append(
+        "Hits are papers, NOT constants. A paper on the right topic is not\n"
+        "evidence a constant is reported in it - that still needs reading the\n"
+        "methods section. Use `paperclip grep --from <id>` for the sentence."
+    )
+    _print("SEARCH", "\n".join(lines))
+    return 0
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
     """Report what literature calibration recovered, and what it did not.
 
@@ -128,9 +179,26 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     from .assays.sources import get_source
 
     src = get_source(args.source)
-    lines = [f"source: {src.name}"]
-    if reason := src.why_unavailable():
-        lines.append(f"  unavailable: {reason}")
+
+    # The numbers below come from REPORTS in literature.py - the recorded
+    # PubMed attempt - whatever --source says. Selecting a live source does NOT
+    # currently regenerate them: nothing here calls src.search().
+    #
+    # Labelling them with the requested source would attribute a PubMed result
+    # to a corpus that never produced it, which is the invented-provenance
+    # failure this project exists to criticise. So the header states where the
+    # findings actually came from, and says plainly when the requested source
+    # was not used.
+    lines = ["findings from : recorded PubMed attempt (assays/literature.py)"]
+    if src.name != "recorded":
+        lines.append(f"requested source: {src.name}  -- NOT used to produce these")
+        if reason := src.why_unavailable():
+            lines.append(f"  unavailable: {reason}")
+        else:
+            lines.append(
+                "  available, but `calibrate` replays recorded findings; it does\n"
+                "  not yet re-run queries. Use `refute search` for live evidence."
+            )
     lines.append("")
 
     if args.key:
@@ -673,6 +741,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_assays.add_argument("--key", help="show one protocol in detail")
     p_assays.set_defaults(func=cmd_assays)
+
+    p_search = sub.add_parser(
+        "search",
+        parents=[common],
+        help="query the live corpus (needs a Paperclip credential)",
+    )
+    p_search.add_argument("query", nargs="?", default="", help="free-text query")
+    p_search.add_argument("--key", help="use a protocol's own recorded query")
+    p_search.add_argument("--limit", type=int, default=8)
+    p_search.set_defaults(func=cmd_search)
 
     p_cal = sub.add_parser(
         "calibrate", parents=[common], help="what literature calibration recovered"

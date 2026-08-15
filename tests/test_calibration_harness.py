@@ -169,31 +169,111 @@ def test_unknown_source_is_rejected():
         get_source("scholar")
 
 
+# --------------------------------------------------------------------------
+# Verified against the live CLI on 2026-08-15. These replace three tests
+# written against a GUESSED contract, all of which were wrong:
+#
+#   - `--json` was assumed. It is accepted and silently ignored; the output is
+#     human-readable text.
+#   - `search` was assumed to need no source. It errors without -s.
+#   - the parser was written to "degrade to empty rather than raising", which
+#     was actively dangerous: it made a changed output format indistinguishable
+#     from "the literature contains nothing" - and that is this project's
+#     headline finding. A parser able to manufacture that result silently can
+#     invalidate the whole claim.
+# --------------------------------------------------------------------------
+
+REAL_SEARCH_OUTPUT = """Found 2 papers  [s_39d543ad]
+
+  1. Harnessing the
+Biomimetic Effect of Macromolecular
+Crowding in the Cell-Derived Model of Clubfoot Fibrosis
+     Martina Doubkova, Jarmila Knitlova, David Vondrasek, Adam Eckhardt, ...
+     PMC11480992 · PMC · 2024-08-30
+     https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11480992/
+     "A biomimetic in vitro model using macromolecular crowding was developed."
+
+  2. A preliminary preclinical assessment of macromolecular crowding
+     Kyriakos Spanoudes, Laura Trujillo Cubillo, Stefanie H. Korntner, ...
+     PMC12830566 · PMC · 2026-01-21
+     https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12830566/
+     "Macromolecular crowding was used to culture human mesenchymal cells."
+
+[285ms, saved to s_39d543ad]
+"""
+
+
+def test_parse_reads_the_real_cli_output():
+    hits = PaperclipSource.parse(REAL_SEARCH_OUTPUT)
+    assert len(hits) == 2
+    assert hits[0].source == "PMC11480992"
+    assert hits[1].source == "PMC12830566"
+    assert "biomimetic in vitro model" in hits[0].snippet
+
+
+def test_parse_reassembles_titles_that_wrap_across_lines():
+    """Real titles wrap, and the continuation lines are not indented like the
+    rest of the entry - which is exactly where a naive line-based parser breaks."""
+    hits = PaperclipSource.parse(REAL_SEARCH_OUTPUT)
+    assert "Macromolecular" in hits[0].title and "Clubfoot" in hits[0].title
+    # The author line must NOT end up in the title.
+    assert "Doubkova" not in hits[0].title
+
+
+def test_result_id_is_recoverable_for_chaining_grep():
+    assert PaperclipSource.result_id(REAL_SEARCH_OUTPUT) == "s_39d543ad"
+
+
 @pytest.mark.parametrize(
     "payload",
     [
-        '[{"doi":"10.1/x","title":"T","snippet":"S"}]',
-        '{"results":[{"doi":"10.1/x","title":"T","snippet":"S"}]}',
-        '{"hits":[{"pmid":"123","title":"T","text":"S"}]}',
+        "not json",
+        "Error: search requires a source flag (-s).",
+        '[{"doi":"10.1/x","title":"T"}]',   # the shape that was WRONGLY assumed
+        "",
     ],
 )
-def test_parse_tolerates_plausible_response_shapes(payload):
-    """The schema is unverified until a credential exists, so the parser accepts
-    the shapes it might reasonably meet instead of assuming one."""
-    hits = PaperclipSource.parse(payload)
-    assert len(hits) == 1 and hits[0].title == "T"
+def test_parse_raises_rather_than_reporting_an_empty_literature(payload):
+    """The property that matters most in this file.
+
+    Zero hits must be something the CLI *said*, never something an exception
+    handler produced. Reversed deliberately from the original test, which
+    asserted the opposite.
+    """
+    with pytest.raises(ValueError):
+        PaperclipSource.parse(payload)
 
 
-@pytest.mark.parametrize("payload", ["not json", "{}", '{"unexpected": 1}', "[]"])
-def test_parse_degrades_to_empty_rather_than_raising(payload):
-    """Losing one batch mid-event is recoverable; a crash in the middle of a
-    two-day build is not."""
+@pytest.mark.parametrize(
+    "payload",
+    ["No matches for /mortalit/ in s_b5eb83c7", "Found 0 papers  [s_abc123]"],
+)
+def test_a_genuine_zero_result_is_not_an_error(payload):
+    """The other half: the tool saying 'nothing' is data, and must parse."""
     assert PaperclipSource.parse(payload) == []
 
 
-def test_parse_skips_unreadable_rows_without_dropping_good_ones():
-    hits = PaperclipSource.parse('[{"doi":"10.1/a","title":"A"}, "junk", 42]')
-    assert len(hits) == 1 and hits[0].source == "10.1/a"
+def test_parse_catches_a_header_that_no_longer_matches_its_body():
+    """If the CLI says it found papers and none parse, the format has moved."""
+    with pytest.raises(ValueError, match="none could be parsed"):
+        PaperclipSource.parse("Found 5 papers  [s_a1b2]\n\n   ??? unexpected")
+
+
+def test_search_command_carries_a_source():
+    """`search` errors without -s/--source. This was the first contract break."""
+    cmd = PaperclipSource().command("collagen delamination", limit=5)
+    assert "-s" in cmd
+    assert cmd[cmd.index("-s") + 1]
+    assert "--json" not in cmd, "--json is silently ignored by the real CLI"
+
+
+def test_grep_command_scopes_to_a_result_set():
+    """Failure constants are a SHAPE in a methods section, not a topic - grep
+    is the tool, and `map` is gated to GXL testers on this account."""
+    cmd = PaperclipSource().grep_command("mortalit", from_id="s_abc", context=2)
+    assert cmd[:2] == ["paperclip", "grep"]
+    assert "--from" in cmd and "s_abc" in cmd
+    assert "-C" in cmd and "2" in cmd
 
 
 # -- report arithmetic ------------------------------------------------------
