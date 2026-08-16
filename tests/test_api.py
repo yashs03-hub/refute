@@ -202,12 +202,14 @@ def test_run_bad_model_spec_is_400(monkeypatch):
     assert r.status_code == 400
 
 
-def test_assays_reports_two_runnable_and_five_scaffolds():
+def test_assays_reports_two_runnable_and_six_scaffolds():
     """Was one runnable (Experiment 4 only); `bleomycin_lung` promoted to
     LITERATURE tier 2026-08-16. `runnable` here means the registry's
     constants are real, not that `/score` can do anything sensible with a
     bleomycin_lung design - `twin.py` still models only the fibrin
-    apparatus. See `bleomycin_lung.py`'s module docstring."""
+    apparatus. See `bleomycin_lung.py`'s module docstring. Scaffold count is
+    six, not five, since `apoptosis_resistance` landed the same day as a
+    brand-new candidate third twin, still SCAFFOLD (see tier1.py)."""
     r = client.get("/assays")
     assert r.status_code == 200
     body = r.json()
@@ -216,7 +218,7 @@ def test_assays_reports_two_runnable_and_five_scaffolds():
 
     assert len(runnable) == 2, "Experiment 4 (MEASURED) + bleomycin_lung (LITERATURE)"
     assert {a["key"] for a in runnable} == {"fibrin_contracture", "bleomycin_lung"}
-    assert len(scaffolds) == 5
+    assert len(scaffolds) == 6
     # A scaffold must name what it lacks, or the refusal is not actionable.
     assert all(a["missing_constants"] for a in scaffolds)
 
