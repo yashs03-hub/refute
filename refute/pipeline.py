@@ -261,7 +261,7 @@ def _valueless(resolutions: ResolutionSet, keys: tuple[str, ...]) -> tuple[str, 
 
 
 def _tier0_design(
-    design: DesignSpec, protocol: AssayProtocol, resolutions: ResolutionSet
+    design: Any, protocol: AssayProtocol, resolutions: ResolutionSet
 ) -> Tier0Design:
     """Assemble the arithmetic's inputs from whatever actually resolved.
 
@@ -277,6 +277,8 @@ def _tier0_design(
 
     n_per_arm = value("n_per_arm")
     alpha = value("alpha")
+    twin = TWINS.get(protocol.key)
+    capacity = twin.default_capacity if twin else PLATE_WELLS
     return Tier0Design(
         assay=protocol.name,
         n_arms=max(len(design.conditions), 2),
@@ -284,7 +286,7 @@ def _tier0_design(
             int(n_per_arm) if n_per_arm is not None
             else design.replicates_per_condition
         ),
-        capacity=PLATE_WELLS,
+        capacity=capacity,
         expected_effect=value("effect_size"),
         variability_sd=_within_arm_sd(resolutions),
         unit=protocol.unit,
@@ -294,6 +296,7 @@ def _tier0_design(
             "design as proposed"
         ),
     )
+
 
 
 # --- the stops --------------------------------------------------------------
@@ -366,7 +369,7 @@ def _refuse(
 
 
 def _run_tier0(
-    design: DesignSpec,
+    design: Any,
     protocol: AssayProtocol,
     resolutions: ResolutionSet,
     decision: RouteDecision,

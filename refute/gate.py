@@ -126,7 +126,7 @@ def _keys(requirements: Iterable[Requirement]) -> tuple[str, ...]:
     return tuple(r.key for r in requirements)
 
 
-def _scope_violations(design: DesignSpec, protocol: AssayProtocol) -> tuple[str, ...]:
+def _scope_violations(design: Any, protocol: AssayProtocol) -> tuple[str, ...]:
     """What this design proposes that this protocol cannot represent.
 
     Two sources, and neither is a text match against the protocol's vocabulary.
@@ -150,7 +150,7 @@ def _scope_violations(design: DesignSpec, protocol: AssayProtocol) -> tuple[str,
     """
     violations = list(design.unmodelled())
 
-    if protocol.readout.destructive and design.normalise_to_own_baseline:
+    if protocol.readout.destructive and getattr(design, "normalise_to_own_baseline", False):
         violations.append(
             f"each {protocol.unit} is normalised to its own pre-treatment "
             f"measurement, but '{protocol.readout.name}' is a destructive "
@@ -161,8 +161,9 @@ def _scope_violations(design: DesignSpec, protocol: AssayProtocol) -> tuple[str,
     return tuple(violations)
 
 
+
 def route_design(
-    design: DesignSpec,
+    design: Any,
     protocol: AssayProtocol,
     resolutions: ResolutionSet,
 ) -> RouteDecision:
