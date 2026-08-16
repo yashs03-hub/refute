@@ -140,8 +140,6 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
     assay = getattr(args, "assay", DEFAULT_ASSAY)
     twin = get_twin(assay)
-    protocol = REGISTRY.get(assay)
-    assay_name = protocol.name if protocol else assay
 
     extractor = None
     if not args.no_model:
@@ -152,8 +150,10 @@ def cmd_chat(args: argparse.Namespace) -> int:
     session = Session(extractor=extractor, n_sims=args.sims, assay=assay)
 
     print("=" * 68)
-    print(f"refute chat ({assay_name}) — describe your experiment; every answer is simulated")
+    print(f"refute chat ({twin.key}) — describe your experiment; every answer is simulated")
     print("=" * 68)
+
+
     print(
         "\nDescribe the arms, replicates, when you treat, when you measure and\n"
         "the endpoint. Then ask: what should I change · what if I add aprotinin ·\n"

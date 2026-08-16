@@ -436,14 +436,25 @@ def test_advise_with_custom_design_files(tmp_path, capsys):
     assert "ADVICE" in out
 
 
+def test_chat_starts_with_default_assay(capsys, monkeypatch):
+    """Regression: `cmd_chat` referenced `assay`/`twin` before either was
+    ever assigned - a hard NameError on every invocation, caught only
+    because `test_checkpoint4.py` tests `chat.Session` directly and never
+    goes through this CLI entry point. Every other multi-assay command in
+    this file got exactly this kind of smoke test; chat did not."""
+    monkeypatch.setattr("builtins.input", lambda *_: (_ for _ in ()).throw(EOFError))
+    code = main(["chat", "--no-model", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "refute chat (fibrin_contracture)" in out
+
+
 def test_chat_with_fibrin_assay(monkeypatch, capsys):
     monkeypatch.setattr("builtins.input", lambda _prompt="": "quit")
     code = main(["chat", "--assay", "fibrin_contracture", "--no-model", "--sims", str(SIMS)])
     out = capsys.readouterr().out
     assert code == 0
-    assert "refute chat (Anchored fibrin gel contracture (Roberts 2022 'contracture-in-a-well'))" in out
-
-
+    assert "refute chat (fibrin_contracture)" in out
 
 
 def test_chat_with_bleomycin_assay(monkeypatch, capsys):
@@ -451,7 +462,7 @@ def test_chat_with_bleomycin_assay(monkeypatch, capsys):
     code = main(["chat", "--assay", "bleomycin_lung", "--no-model", "--sims", str(SIMS)])
     out = capsys.readouterr().out
     assert code == 0
-    assert "refute chat (Bleomycin-induced pulmonary fibrosis (murine))" in out
+    assert "refute chat (bleomycin_lung)" in out
 
 
 def test_chat_with_design_file(tmp_path, monkeypatch, capsys):
@@ -466,9 +477,8 @@ def test_chat_with_design_file(tmp_path, monkeypatch, capsys):
     ])
     out = capsys.readouterr().out
     assert code == 0
-    assert "refute chat (Bleomycin-induced pulmonary fibrosis (murine))" in out
+    assert "refute chat (bleomycin_lung)" in out
     assert "computed from:" in out
-
 
 
 def test_tier0_with_both_assays(capsys):
