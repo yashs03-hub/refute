@@ -358,3 +358,24 @@ def test_advise_with_bleomycin_assay(capsys):
     assert code == 0
     assert "ADVICE" in out
 
+
+def test_chat_starts_with_default_assay(capsys, monkeypatch):
+    """Regression: `cmd_chat` referenced `assay`/`twin` before either was
+    ever assigned - a hard NameError on every invocation, caught only
+    because `test_checkpoint4.py` tests `chat.Session` directly and never
+    goes through this CLI entry point. Every other multi-assay command in
+    this file got exactly this kind of smoke test; chat did not."""
+    monkeypatch.setattr("builtins.input", lambda *_: (_ for _ in ()).throw(EOFError))
+    code = main(["chat", "--no-model", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "refute chat (fibrin_contracture)" in out
+
+
+def test_chat_with_bleomycin_assay(capsys, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda *_: (_ for _ in ()).throw(EOFError))
+    code = main(["chat", "--no-model", "--assay", "bleomycin_lung", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "refute chat (bleomycin_lung)" in out
+
