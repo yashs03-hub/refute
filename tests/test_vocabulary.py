@@ -48,14 +48,18 @@ from refute.vocabulary import (
 
 # Terms a layer 1 finding might plausibly carry. None of them is declared here,
 # and none of them should resolve until somebody agrees a binding.
+#
+# "fibroblast", "human", "lung" and "synovium" used to live in this list, back
+# when species/tissue/cell_type were uniformly absent. They are real declared
+# terms now (bleomycin_lung and fibrin_contracture state them) - see
+# `test_species_tissue_and_cell_type_reflect_only_what_protocols_state` - so
+# keeping them here would assert the opposite of what the registry says.
 LAYER_1_SHAPED = (
     "TGF-β1",
     "TGF-beta1",
-    "fibroblast",
     "myofibroblast",
-    "human",
-    "lung",
-    "synovium",
+    "rat",
+    "epithelium",
     "alpha-SMA",
     "collagen I",
     "Ashcroft score",
@@ -76,7 +80,11 @@ def _field_values(protocol: AssayProtocol, source_field: str) -> set[str]:
         return {c.name for c in protocol.all_constants()}
     if source_field.startswith("AssayProtocol."):
         value = getattr(protocol, source_field.split(".", 1)[1], None)
-        return {value} if isinstance(value, str) and value else set()
+        if isinstance(value, str) and value:
+            return {value}
+        if isinstance(value, ScopeTerm) and value.term:
+            return {value.term}
+        return set()
     raise AssertionError(f"no independent reader for {source_field!r}")
 
 
@@ -226,15 +234,21 @@ def test_the_report_names_every_declared_term():
         assert term.text in report, term.text
 
 
-def test_the_report_names_the_facets_this_side_cannot_declare():
-    """The absence is the finding. It has to survive into the output."""
+def test_the_report_now_declares_species_tissue_and_cell_type():
+    """As of 2026-08-16 these facets are no longer uniformly absent.
+
+    `bleomycin_lung` and `fibrin_contracture` state them; the other five
+    protocols genuinely do not, so the fact worth protecting moved from "the
+    facet is empty" to "the facet is real evidence, not a guess" - see
+    `test_species_tissue_and_cell_type_reflect_only_what_protocols_state`.
+    """
     report = coverage_report()
+    declared = _section(report, "WHAT THIS SIDE DECLARES")
+    for facet in (Facet.SPECIES, Facet.TISSUE, Facet.CELL_TYPE, Facet.READOUT):
+        assert VOCABULARY.by_facet(facet), f"{facet.value} unexpectedly empty"
+        assert facet.value in declared, facet.value
     missing = _section(report, "WHAT THIS SIDE CANNOT DECLARE")
-    for facet in (Facet.SPECIES, Facet.TISSUE, Facet.CELL_TYPE):
-        assert not VOCABULARY.by_facet(facet), f"{facet.value} became declared"
-        assert facet.value in missing, facet.value
-    assert "AssayProtocol.species" in missing
-    assert Facet.READOUT.value in _section(report, "WHAT THIS SIDE DECLARES")
+    assert "nothing" in missing.lower()
 
 
 def test_the_report_says_the_alias_map_is_empty():
@@ -375,31 +389,58 @@ def _with_species(protocol: AssayProtocol, species: str) -> AssayProtocol:
     return replace(protocol, species=ScopeTerm(species, "NCBITaxon:10090"))
 
 
-def test_species_tissue_and_cell_type_are_absent_rather_than_guessed():
-    """`bleomycin_lung` is obviously murine. Obvious is not declared.
+def test_species_tissue_and_cell_type_reflect_only_what_protocols_state():
+    """`bleomycin_lung` is obviously murine; `fibrin_contracture` obviously
+    uses human synovial fibroblasts. Both say so in their own `summary`/`name`
+    text, with `ScopeBasis.STATED` or `.INFERRED`, and that is exactly the two
+    protocols' worth of evidence this module is allowed to hold - not five
+    more guessed from "well, most of these are probably human/mouse too".
 
-    Reading it out of the `name` string would produce a vocabulary that
-    disagrees with the code it claims to describe, and the disagreement would
-    only surface when a finding matched a protocol it should not have.
+    Reading a species into a protocol whose text only says "fibroblasts" would
+    produce a vocabulary that disagrees with the code it claims to describe,
+    and the disagreement would only surface when a finding matched a protocol
+    it should not have.
     """
-    for facet in (Facet.SPECIES, Facet.TISSUE, Facet.CELL_TYPE):
-        assert terms(facet) == ()
-    assert translate("mouse") is None
+    species = {t.text: t.protocols for t in terms(Facet.SPECIES)}
+    assert species == {
+        "mouse": ("bleomycin_lung",),
+        "human": ("fibrin_contracture",),
+    }
+    tissue = {t.text: t.protocols for t in terms(Facet.TISSUE)}
+    assert tissue == {
+        "lung": ("bleomycin_lung",),
+        "synovium": ("fibrin_contracture",),
+    }
+    cell_type = {t.text: t.protocols for t in terms(Facet.CELL_TYPE)}
+    assert cell_type == {
+        "fibroblast": ("cell_derived_matrix", "scar_in_a_jar"),
+        "synovial fibroblast": ("fibrin_contracture",),
+    }
+    # A synonym is an agreement, not a fact this side can assert unilaterally -
+    # "mouse" is the canonical spelling declared, so a variant must not resolve
+    # on its own.
     assert translate("murine") is None
+    assert translate("rodent") is None
+    assert translate("mus musculus") is None
 
 
 def test_an_absent_facet_fills_itself_when_the_field_appears():
-    """No edit to vocabulary.py when the agreement lands - that is the point."""
+    """No edit to vocabulary.py when a field gets a real value - that is the
+    point. `traction_force` genuinely declares no species today; overriding it
+    here shows the facet would populate without touching this module, and its
+    still-unspecified `tissue` shows the absence survives for the facets that
+    really are absent.
+    """
     populated = Vocabulary.from_protocols(
-        [_with_species(REGISTRY["bleomycin_lung"], "Mus musculus")]
+        [_with_species(REGISTRY["traction_force"], "Mus musculus")]
     )
     species = populated.by_facet(Facet.SPECIES)
     assert [t.text for t in species] == ["mus musculus"]
     assert species[0].source_field == "AssayProtocol.species"
-    assert species[0].protocols == ("bleomycin_lung",)
+    assert species[0].protocols == ("traction_force",)
     assert populated.translate("Mus musculus") is not None
 
-    report = populated.report([_with_species(REGISTRY["bleomycin_lung"], "Mus musculus")])
+    report = populated.report([_with_species(REGISTRY["traction_force"], "Mus musculus")])
     assert "mus musculus" in report
     assert Facet.SPECIES.value not in _section(report, "WHAT THIS SIDE CANNOT DECLARE")
     assert Facet.TISSUE.value in _section(report, "WHAT THIS SIDE CANNOT DECLARE")
