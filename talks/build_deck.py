@@ -396,20 +396,27 @@ _footer(s, n)
 # --- 7. Layer 2 grounds it anyway ------------------------------------------
 
 s = new_slide()
-_kicker(s, "Nothing prebuilt fits — ground the design directly")
-_title(s, "The same Paperclip link, aimed at what's actually needed.")
-_bullets(s, Inches(0.7), Inches(2.05), Inches(11.9), Inches(4.3), [
-    "A fibroblast-specific — ideally adventitial-specific — Cre driver "
-    "line for mouse lung, published and available.",
-    "Floxed Ripk3 and Mlkl conditional alleles, and any prior study "
-    "combining either with a fibroblast Cre.",
-    "Phospho-MLKL/phospho-RIPK3 detection validated in lung TISSUE, not "
-    "just cell culture — and whether it survives dissociation.",
-    "Fibroblast-specific influenza necroptosis precedent, flagged "
-    "explicitly if only epithelial-cell data exists as a proxy.",
-    "A flow-compatible ferroptosis readout (lipid peroxidation, GPX4) for "
-    "the second arm the residual's own signal pointed toward.",
-], size=17, gap=14)
+_kicker(s, "Nothing prebuilt fits — grounded anyway")
+_title(s, "What's buildable, and what isn't.", size=28)
+_bullets(s, Inches(0.7), Inches(1.9), Inches(11.9), Inches(4.85), [
+    ("Cre driver — precedented, not adventitial-specific.",
+     "Pdgfra-CreERT2 already used in a PR8-family infection study (Jones "
+     "2024, Science) — true adventitial drivers (Pi16/Dpt) validated only "
+     "in skin, never lung."),
+    ("Floxed Ripk3/Mlkl — a real gap.", "Conditional alleles exist; none "
+     "has ever been crossed to a fibroblast Cre, in any tissue. A "
+     "from-scratch cross, not an ordering formality."),
+    ("p-MLKL detection — the strongest-grounded piece.", "IHC precedented "
+     "on PR8-infected lung itself (Wang 2019), optimized on infected lung "
+     "(Kelepouras 2024). Flow on dissociated cells has ZERO precedent — "
+     "likely the same dissociation-loss problem the scRNA-seq hit."),
+    ("The hypothesis itself is a real, unanswered gap.", "IRFibs are "
+     "named, real cells from an actual PR8 paper (Boyd 2020, Nature) — "
+     "which never looks at whether they die. No fibroblast-specific "
+     "effect size exists to power against."),
+    ("Ferroptosis arm — the weakest-grounded piece.", "No lung-flow "
+     "protocol found anywhere for BODIPY-C11. Needs its own pilot first."),
+], size=13, gap=8)
 _footer(s, n)
 
 # --- 8. Layer 3 — beats a frontier model ------------------------------------
