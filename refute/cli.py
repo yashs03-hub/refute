@@ -820,6 +820,27 @@ def cmd_tier0(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_optimize(args: argparse.Namespace) -> int:
+    """The cheapest design that clears a power target - a human-facing search
+    against the twin. See `optimize.py`'s docstring before wiring this into
+    anything the agent under test can reach: it must never be."""
+    from .optimize import CANONICAL_CONDITIONS, optimize_design
+
+    conditions = tuple(args.conditions.split(",")) if args.conditions else CANONICAL_CONDITIONS
+    result = optimize_design(
+        antifibrinolytic=args.antifibrinolytic,
+        target_power=args.power,
+        target_testable=args.testable,
+        capacity=args.capacity,
+        conditions=conditions,
+        endpoint_time_h=args.endpoint,
+        allow_assumption_sensitive=args.allow_assumption_sensitive,
+        n_sims=args.sims,
+    )
+    _print("OPTIMIZE", result.summary())
+    return 0 if result.found else 2
+
+
 def cmd_harnesses(args: argparse.Namespace) -> int:
     """The harness is a variable, not a constant. Say what each one is."""
     from .harness import describe
@@ -1018,6 +1039,26 @@ def main(argv: list[str] | None = None) -> int:
         "--ladder", action="store_true", help="explain the tiers and stop"
     )
     p_t0.set_defaults(func=cmd_tier0)
+
+    p_opt = sub.add_parser(
+        "optimize",
+        parents=[common],
+        help="cheapest design that clears a power target (human-facing only)",
+    )
+    p_opt.add_argument(
+        "--antifibrinolytic", action="store_true",
+        help="required, explicit - the search never decides this for you (PLAN 9.1)",
+    )
+    p_opt.add_argument("--power", type=float, default=0.80, help="target power")
+    p_opt.add_argument("--testable", type=float, default=0.80, help="target testable rate")
+    p_opt.add_argument("--capacity", type=int, default=12, help="wells available")
+    p_opt.add_argument("--conditions", default="", help="comma-separated, default the 4 canonical arms")
+    p_opt.add_argument("--endpoint", type=float, default=168.0, help="hours since cast")
+    p_opt.add_argument(
+        "--allow-assumption-sensitive", action="store_true",
+        help="let a winner stand even if its verdict depends on an ASSUMED constant",
+    )
+    p_opt.set_defaults(func=cmd_optimize)
 
     sub.add_parser(
         "harnesses",
