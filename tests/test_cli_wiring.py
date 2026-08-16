@@ -326,12 +326,60 @@ def _stub_importlib(import_module):
 # --- multi-assay twin CLI wiring ---------------------------------------------
 
 
+def test_baseline_with_fibrin_default(capsys):
+    code = main(["baseline", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "12-well design" in out
+    assert "power" in out
+
+
+def test_baseline_with_fibrin_explicit(capsys):
+    code = main(["baseline", "--assay", "fibrin_contracture", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "12-well design" in out
+
+
 def test_baseline_with_bleomycin_assay(capsys):
     code = main(["baseline", "--assay", "bleomycin_lung", "--sims", str(SIMS)])
     out = capsys.readouterr().out
     assert code == 0
     assert "20-animal design" in out
     assert "power to recover injected MSC effect" in out
+
+
+def test_baseline_with_custom_design_files(tmp_path, capsys):
+    from refute.bleomycin_design import DEFAULT_BLEOMYCIN_DESIGN
+    from refute.design import EXPERIMENT_4_AS_RUN
+
+    fibrin_path = tmp_path / "fibrin.json"
+    fibrin_path.write_text(EXPERIMENT_4_AS_RUN.model_dump_json())
+    code = main(["baseline", "--design", str(fibrin_path), "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "12-well design" in out
+
+    bleo_path = tmp_path / "bleo.json"
+    bleo_path.write_text(DEFAULT_BLEOMYCIN_DESIGN.model_dump_json())
+    code = main([
+        "baseline", "--assay", "bleomycin_lung",
+        "--design", str(bleo_path), "--sims", str(SIMS)
+    ])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "20-animal design" in out
+
+
+def test_optimize_fibrin(capsys):
+    code = main([
+        "optimize", "--assay", "fibrin_contracture", "--antifibrinolytic",
+        "--power", "0.01", "--testable", "0.01", "--allow-assumption-sensitive",
+        "--sims", str(SIMS)
+    ])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "OPTIMIZE" in out
 
 
 def test_optimize_bleomycin_requires_msc_route(capsys):
@@ -352,9 +400,100 @@ def test_optimize_bleomycin_with_route(capsys):
     assert "WINNER" in out or "OPTIMIZE" in out
 
 
+def test_advise_with_fibrin_assay(capsys):
+    code = main(["advise", "--assay", "fibrin_contracture", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "ADVICE" in out
+
+
 def test_advise_with_bleomycin_assay(capsys):
     code = main(["advise", "--assay", "bleomycin_lung", "--sims", str(SIMS)])
     out = capsys.readouterr().out
     assert code == 0
     assert "ADVICE" in out
+
+
+def test_advise_with_custom_design_files(tmp_path, capsys):
+    from refute.bleomycin_design import DEFAULT_BLEOMYCIN_DESIGN
+    from refute.design import EXPERIMENT_4_AS_RUN
+
+    fibrin_path = tmp_path / "fibrin.json"
+    fibrin_path.write_text(EXPERIMENT_4_AS_RUN.model_dump_json())
+    code = main(["advise", "--design", str(fibrin_path), "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "ADVICE" in out
+
+    bleo_path = tmp_path / "bleo.json"
+    bleo_path.write_text(DEFAULT_BLEOMYCIN_DESIGN.model_dump_json())
+    code = main([
+        "advise", "--assay", "bleomycin_lung",
+        "--design", str(bleo_path), "--sims", str(SIMS)
+    ])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "ADVICE" in out
+
+
+def test_chat_with_fibrin_assay(monkeypatch, capsys):
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "quit")
+    code = main(["chat", "--assay", "fibrin_contracture", "--no-model", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "refute chat (Anchored fibrin gel contracture (Roberts 2022 'contracture-in-a-well'))" in out
+
+
+
+
+def test_chat_with_bleomycin_assay(monkeypatch, capsys):
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "quit")
+    code = main(["chat", "--assay", "bleomycin_lung", "--no-model", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "refute chat (Bleomycin-induced pulmonary fibrosis (murine))" in out
+
+
+def test_chat_with_design_file(tmp_path, monkeypatch, capsys):
+    from refute.bleomycin_design import DEFAULT_BLEOMYCIN_DESIGN
+    bleo_path = tmp_path / "bleo.json"
+    bleo_path.write_text(DEFAULT_BLEOMYCIN_DESIGN.model_dump_json())
+
+    monkeypatch.setattr("builtins.input", lambda _prompt="": "quit")
+    code = main([
+        "chat", "--assay", "bleomycin_lung", "--design", str(bleo_path),
+        "--no-model", "--sims", str(SIMS)
+    ])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "refute chat (Bleomycin-induced pulmonary fibrosis (murine))" in out
+    assert "computed from:" in out
+
+
+
+def test_tier0_with_both_assays(capsys):
+    code_fib = main([
+        "tier0", "--assay", "fibrin_contracture", "--arms", "4", "--n", "3",
+        "--capacity", "12", "--effect", "10", "--sd", "2"
+    ])
+    out_fib = capsys.readouterr().out
+    assert code_fib == 0
+    assert "TIER 0 - fibrin_contracture" in out_fib
+
+    code_bleo = main([
+        "tier0", "--assay", "bleomycin_lung", "--arms", "2", "--n", "10",
+        "--capacity", "40", "--effect", "3", "--sd", "0.6", "--unit", "animal"
+    ])
+    out_bleo = capsys.readouterr().out
+    assert code_bleo == 0
+    assert "TIER 0 - bleomycin_lung" in out_bleo
+
+
+def test_route_with_bleomycin_assay(capsys):
+    code = main(["route", "--recorded", "--assay", "bleomycin_lung", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "ROUTE:" in out
+    assert "bleomycin_lung" in out
+
 

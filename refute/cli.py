@@ -133,12 +133,18 @@ def cmd_assays(args: argparse.Namespace) -> int:
 
 def cmd_chat(args: argparse.Namespace) -> int:
     """A conversation about a design, where every claim is computed."""
+    from .assays import REGISTRY
     from .chat import Session
+    from .design import OutOfTwinScopeError
+    from .twins import DEFAULT_ASSAY, get_twin
+
+    assay = getattr(args, "assay", DEFAULT_ASSAY)
+    twin = get_twin(assay)
+    protocol = REGISTRY.get(assay)
+    assay_name = protocol.name if protocol else assay
 
     extractor = None
     if not args.no_model:
-        from .agent import extract_design
-        from .providers import DEFAULT_EXTRACTOR, spec_from_string
         from .agent import extract_design as default_extract
 
         extractor = default_extract
@@ -146,7 +152,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
     session = Session(extractor=extractor, n_sims=args.sims, assay=assay)
 
     print("=" * 68)
-    print(f"refute chat ({twin.name}) — describe your experiment; every answer is simulated")
+    print(f"refute chat ({assay_name}) — describe your experiment; every answer is simulated")
     print("=" * 68)
     print(
         "\nDescribe the arms, replicates, when you treat, when you measure and\n"
@@ -158,9 +164,11 @@ def cmd_chat(args: argparse.Namespace) -> int:
         session.design = twin.design_spec_type.model_validate(json.loads(open(args.design).read()))
         try:
             session.score = twin.score_fn(session.design, n_sims=args.sims)
-        except OutOfTwinScopeError as exc:
-            _report_out_of_scope(exc)
-            return 2
+        except (OutOfTwinScopeError, ValueError) as exc:
+            if "outside this twin's scope" in str(exc) or isinstance(exc, OutOfTwinScopeError):
+                _report_out_of_scope(exc)
+                return 2
+            raise
         print(session._verdict_sentence(session.score))
         print("\n  computed from:")
         from .chat import _cite
@@ -183,6 +191,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
         print()
         print(turn.render())
         print()
+
 
 
 def cmd_infer(args: argparse.Namespace) -> int:
@@ -849,10 +858,11 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     twin = get_twin(assay)
 
     if twin.optimize_fn is None:
-        _print("CANNOT OPTIMIZE", f"No optimizer registered for assay '{args.assay}'")
+        _print("CANNOT OPTIMIZE", f"No optimizer registered for assay '{assay}'")
         return 2
 
-    if args.assay == "bleomycin_lung":
+    if assay == "bleomycin_lung":
+
         if not args.msc_route:
             _print(
                 "ROUTE REQUIRED",
