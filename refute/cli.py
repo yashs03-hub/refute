@@ -269,38 +269,80 @@ def cmd_advise(args: argparse.Namespace) -> int:
     return 0
 
 
+ROUTE_DEFAULT_ASSAY = "fibrin_contracture"
+"""The assay `route --fixture` falls back to when none is named.
+
+A default is safe for a fixture because the fixture declares the assay it
+answers and `FixtureResolver` refuses a mismatch, so a wrong default stops the
+command rather than answering the wrong question. `--recorded` has no such
+check - see `cmd_route`.
+"""
+
+
 def cmd_route(args: argparse.Namespace) -> int:
     """Walk a resolution set through the whole downstream pipeline.
+
+    Two sources of resolutions, and the difference is the point. `--fixture`
+    replays a hand-written statement of what a resolver's output should look
+    like; `--recorded` replays what the literature pass on 2026-08-04 actually
+    found, via `adapt.RecordedResolver`, which is the only way the downstream
+    half gets exercised on real recovery rates rather than on a description of
+    them. Both are offline and deterministic.
 
     Exits 0 for every route, including the refusals. A stop is an outcome here,
     not an error: "the requirement set is unfinished" and "the twin cannot model
     this" are things the pipeline is FOR, and a non-zero exit would mark them as
     malfunctions in any script that wrapped this. Only a broken invocation - an
-    unreadable fixture, an unknown assay - is a failure.
+    unreadable fixture, an unknown assay, `--recorded` with no assay named - is
+    a failure.
     """
     from .assays import get
     from .design import EXPERIMENT_4_AS_RUN
     from .pipeline import run
-    from .resolve import FixtureResolver
+
+    if args.recorded and not args.assay:
+        # No default here, unlike the fixture path. A fixture names the assay it
+        # answers and is refused against any other, so a wrong default cannot
+        # produce an answer; the recorded reports are keyed by assay and every
+        # key resolves to something, so a silent default would quietly replay a
+        # different assay's findings and route on them without complaint.
+        _print(
+            "ASSAY REQUIRED",
+            "--recorded replays the findings recorded for one assay, and there "
+            "is nothing\nin the request that says which. Name it:\n\n"
+            "  refute route --recorded --assay scar_in_a_jar\n\n"
+            "`refute assays` lists the keys.",
+        )
+        return 2
 
     try:
-        protocol = get(args.assay)
+        protocol = get(args.assay or ROUTE_DEFAULT_ASSAY)
     except KeyError as exc:
         _print("UNKNOWN", str(exc))
         return 2
 
+    if args.recorded:
+        from .adapt import RecordedResolver
+
+        resolver = RecordedResolver()
+        origin = "recorded literature pass (assays/literature.py)"
+    else:
+        from .resolve import FixtureResolver
+
+        resolver = FixtureResolver(args.fixture)
+        origin = args.fixture
+
     try:
-        result = run(
-            EXPERIMENT_4_AS_RUN,
-            protocol,
-            FixtureResolver(args.fixture),
-            n_sims=args.sims,
-        )
+        result = run(EXPERIMENT_4_AS_RUN, protocol, resolver, n_sims=args.sims)
     except (OSError, ValueError) as exc:
-        # A fixture that will not load, or one written for a different assay.
-        # Loud, because a silent fallback here would report a route computed
-        # from something other than the file the user named.
-        _print("FIXTURE NOT USABLE", f"{type(exc).__name__}: {exc}")
+        # A fixture that will not load, or one written for a different assay; or
+        # a recorded report the adapter refuses to convert. Loud, because a
+        # silent fallback here would report a route computed from something
+        # other than the source the user named.
+        _print(
+            "RECORD NOT USABLE" if args.recorded else "FIXTURE NOT USABLE",
+            f"{type(exc).__name__}: {exc}",
+        )
         return 2
 
     _print(
@@ -308,10 +350,82 @@ def cmd_route(args: argparse.Namespace) -> int:
         f"design   Experiment 4 as run ({EXPERIMENT_4_AS_RUN.total_wells} wells, "
         f"endpoint {EXPERIMENT_4_AS_RUN.endpoint_time_h:.0f} h)\n"
         f"assay    {protocol.key}\n"
-        f"fixture  {args.fixture}\n"
+        f"resolver {resolver.name}\n"
+        f"source   {origin}\n"
         f"why      {result.decision.why}\n\n"
         + result.render(),
     )
+    return 0
+
+
+def cmd_intake(args: argparse.Namespace) -> int:
+    """Residual prose in, an assay and a design out - or an honest account of why not.
+
+    Exits 0 for none-of-these. A registry with no protocol for this residual is
+    a limit of the registry, reported as one; treating it as a failed run would
+    make the honest outcome look like a broken tool, which is the pressure that
+    produces a selector that always returns a key.
+
+    Exits 0 with no extractor configured too. `intake` makes exactly one model
+    call and there is no default provider, deliberately - see `intake.py`. The
+    deterministic half, which is the assay selection, still ran and is still
+    the answer to the question the command was asked.
+    """
+    from .intake import Extraction, intake
+
+    result = intake(args.residual)
+    selection = result.selection
+
+    lines = [f"residual  {result.residual}", ""]
+    lines += list(result.narrative)
+    lines.append("")
+
+    if selection.none_of_these:
+        lines.append("SELECTED: none of these")
+    else:
+        best = selection.best
+        lines.append(f"SELECTED: {best.key}  ({best.score:.1f})")
+        lines.append(f"  {best.why}")
+        if not selection.decisive:
+            lines.append(
+                "  The leader is not clear of the field. Acting on it alone "
+                "discards a live\n  alternative, so read the ranking rather "
+                "than the first line."
+            )
+        lines += ["", "ranked candidates:"]
+        for i, c in enumerate(selection.candidates, 1):
+            lines.append(f"  {i}. {c.key:<22} {c.score:>5.1f}  {', '.join(c.terms)}")
+
+    if selection.near_misses:
+        lines += ["", "below the floor, recorded so the miss is readable:"]
+        for c in selection.near_misses:
+            lines.append(f"   - {c.key:<22} {c.score:>5.1f}  {', '.join(c.terms)}")
+    lines += ["", f"considered: {', '.join(selection.considered)}"]
+
+    lines += ["", f"extraction: {result.extraction.value}"]
+    if result.extraction is Extraction.EXTRACTED:
+        lines.append(result.design.model_dump_json(indent=2))
+    else:
+        # Printed verbatim. Both notes are written to make no claim about the
+        # experiment, and paraphrasing one here is how that guarantee gets lost.
+        lines.append(f"  {result.note}")
+    lines += ["", f"ready for the gate: {'yes' if result.ready else 'no'}"]
+
+    _print("INTAKE", "\n".join(lines))
+    return 0
+
+
+def cmd_vocabulary(args: argparse.Namespace) -> int:
+    """Print the layer-2 vocabulary coverage report, unwrapped and unheaded.
+
+    Deliberately not run through `_print`. The report is an artifact to be
+    pasted into the conversation with layer 1, it wraps and indents itself to a
+    fixed width, and a banner this command added would travel with it and read
+    as part of the document.
+    """
+    from .vocabulary import coverage_report
+
+    print(coverage_report())
     return 0
 
 
@@ -983,15 +1097,42 @@ def main(argv: list[str] | None = None) -> int:
     p_route = sub.add_parser(
         "route",
         parents=[common],
-        help="resolve -> gate -> simulate -> advise, from a resolution fixture",
+        help="resolve -> gate -> simulate -> advise, from a fixture or the record",
+    )
+    # Exclusive because they are two different claims about where the numbers
+    # came from, and a run that quietly used one while reporting the other is
+    # the invented-provenance failure this project exists to criticise.
+    p_source = p_route.add_mutually_exclusive_group(required=True)
+    p_source.add_argument("--fixture", help="path to a ResolutionSet JSON file")
+    p_source.add_argument(
+        "--recorded",
+        action="store_true",
+        help="replay the recorded literature findings instead; needs --assay",
     )
     p_route.add_argument(
-        "--fixture", required=True, help="path to a ResolutionSet JSON file"
-    )
-    p_route.add_argument(
-        "--assay", default="fibrin_contracture", help="assay key the fixture answers"
+        "--assay",
+        help=(
+            f"assay key. Required with --recorded; defaults to "
+            f"{ROUTE_DEFAULT_ASSAY} with --fixture"
+        ),
     )
     p_route.set_defaults(func=cmd_route)
+
+    p_intake = sub.add_parser(
+        "intake",
+        parents=[common],
+        help="residual prose -> which assay could settle it, ranked",
+    )
+    p_intake.add_argument(
+        "residual", help="what layer 1 could not settle without new data"
+    )
+    p_intake.set_defaults(func=cmd_intake)
+
+    sub.add_parser(
+        "vocabulary",
+        parents=[common],
+        help="the terms this side declares, and the ones it cannot",
+    ).set_defaults(func=cmd_vocabulary)
 
     p_search = sub.add_parser(
         "search",

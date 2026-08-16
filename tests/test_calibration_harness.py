@@ -116,21 +116,44 @@ def test_nothing_recorded_is_promoted_to_measured():
 
 def test_the_asymmetry_holds_in_the_current_record():
     """The project's central claim, as far as the data currently goes: effect
-    and precision constants are recoverable, failure constants are not. If a
-    failure constant is ever recovered this test should be updated, not deleted
-    - the interesting question is which one, and from where."""
-    readout_hits = failure_hits = 0
+    and precision constants are recoverable far more often than failure
+    constants are, though the six-scaffold sweep found the asymmetry is not
+    absolute. Four failure constants have been recovered, each for a stated,
+    checkable reason rather than a relaxed standard:
+
+      - `mortality_by_day14` (bleomycin_lung) - a welfare-reporting number a
+        regulator obliges authors to publish. Predicted in the module's own
+        header comment before the sweep ran.
+      - `p_seeding_failure` (fibrosis_on_chip) - a QC yield stated as a
+        fraction in a methods section (Mi 2022, 10.3390/mi13101573).
+      - `modulus_drift_pct_per_day` and `drift_depends_on_nominal`
+        (stiffness_drift) - a 42-day rheology time course (Scott 2020,
+        10.1002/adhm.201901593) that also complicates the registry's own
+        hazard declaration for that scaffold; see
+        `findings/stiffness_drift.py`.
+
+    This list is pinned by name, not by count, so a fifth recovery fails
+    loudly with a name to go add rather than a number to bump."""
+    readout_hits = 0
+    failure_names: set[str] = set()
+    RECOVERED_FAILURE_CONSTANTS = {
+        "mortality_by_day14",
+        "p_seeding_failure",
+        "modulus_drift_pct_per_day",
+        "drift_depends_on_nominal",
+    }
     for key, report in REPORTS.items():
         readout_names = {c.name for c in REGISTRY[key].readout.constants}
         for e in report.found:
             if e.constant in readout_names:
                 readout_hits += 1
             else:
-                failure_hits += 1
+                failure_names.add(e.constant)
     assert readout_hits > 0, "no constants recovered at all - record is empty"
-    assert failure_hits == 0, (
-        "a failure constant was recovered; update the claim in PLAN.md §6 "
-        "rather than deleting this test"
+    assert failure_names == RECOVERED_FAILURE_CONSTANTS, (
+        "a failure constant was recovered or lost that this test does not "
+        "name; update the list here and the claim in PLAN.md §6, do not just "
+        "widen the assertion"
     )
 
 

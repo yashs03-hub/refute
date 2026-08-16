@@ -1,7 +1,68 @@
 # Build plan — grounding system, 2 people, 11 hours
 
+> ## ⚠️ PARTLY SUPERSEDED 2026-08-16 — reconcile against the SPEC before using
+>
+> **This is layer 1's build plan, and layer 1's plan now lives in
+> `15 - SPEC - the whole system.md` §8**, which explicitly *"consolidates the
+> system design and the layer 1 build plan"*. This document predates that
+> consolidation. It is kept because its lane discipline and its cut list are
+> better than the SPEC's, and because two of its calls were made for reasons the
+> SPEC does not record. But four things below were settled differently, and one
+> is a straight omission.
+>
+> **Settled differently by the SPEC:**
+>
+> 1. **The frozen-contracts file is `types.py`, not `contracts.py`, and its
+>    contents are SPEC §4.2.** Same idea, different types. The SPEC's `Claim`
+>    carries `status` and `origin_event`; this file's carries `kind`, `context`
+>    and `made_at_step` and neither of the first two. Do not freeze both.
+> 2. **The verdict vocabulary is five categories, not seven** — `contradicted` ·
+>    `unsupported` · `supported` · `context_dependent` · `no_evidence` (SPEC §4,
+>    under the verdict format locked in §3). `Label` below splits `scope-mismatch` out of `context-dependent`
+>    and `not-in-literature` out of `not-searched`. The second of those
+>    distinctions is right and survives, but it lives on the **handoff** — SPEC
+>    §5.3 property 5, and `OpenItem.searched` / `queries_run` in
+>    `refute/handoff.py` — rather than as a verdict label. The first is not in
+>    the locked set at all.
+> 3. **The lane split is A spine / B grounding / C data check / D evaluation**
+>    (SPEC §8.3), not A runtime / B epistemics. The SPEC also says which lanes to
+>    hand to helpers — A and D, because they need no API key and no prompt work.
+>    The hour-by-hour table below assigns the same work differently.
+> 4. **Step order is fixed and the viewer is second.** SPEC §8.2: spine → viewer
+>    and replay → data check → grounding → analysis agent → handoff. This
+>    document puts rendering at hours 6–8 and never builds a replay at all.
+>
+> **The omission, and it is the significant one: traceability.** SPEC §6 makes it
+> *"a requirement, not a feature"* — a run tree, an artifact store, `origin_event`
+> on every object, one traced model wrapper that is never bypassed, a record of
+> what was retrieved and *not* used, and replay. None of that appears anywhere
+> below. The SPEC's never-cut list is *the trace, the ledger, invalidation,
+> replay, the two fixtures*; the never-cut list at the end of this file is a
+> different four items and does not include a single one of them. Both lists are
+> defensible and they are not the same list. Reconcile explicitly rather than
+> taking whichever file you opened first.
+>
+> **Two smaller notes.** The SPEC ends layer 1 with a **handoff** (§5, §8.2 step
+> 6) and there is no handoff step below — which matters, because the handoff is
+> the entire reason layer 2 exists. And this file's third descope, *"the
+> controller ships advisory"*, sits against a locked decision that consequence is
+> deterministic (SPEC §3); the SPEC leaves *how hard the interrupt is by severity*
+> open (§4), so advisory-first is arguable, but it is arguable against a lock and
+> should be raised rather than assumed.
+>
+> **Still good, and not in the SPEC:** the one-rule import ban and the boundary
+> test in §7; the three descopes; hand-scoring ledger fidelity at first
+> integration; the carry-on control as the arm to keep if only one fits; and the
+> ordered cut list. Those are the reason to keep this file.
+>
+> **On the schedule.** The eleven hours are 15–16 August and have largely
+> elapsed. Read the hour markers as an ordering, not as a clock.
+
 Companion to the module plan. That document says *what* and *why*; this one says
 *who touches which file, in what order, and what unblocks what.*
+
+*2026-08-16: "the module plan" is the document the SPEC consolidated. The SPEC
+is now both — read it first, then this for the sequencing.*
 
 **Move this into the shared repo root.** It is written for that repo, not for
 refute — refute is not a dependency of anything here.
@@ -52,6 +113,10 @@ advisory first. Promote to blocking only for verdicts the data corroborated.
 
 One file. Both people in it. Nobody edits it afterwards without saying so out
 loud, because every other file depends on its shape.
+
+> *2026-08-16 — superseded as the file to freeze. SPEC §8.1 names it `types.py`
+> and SPEC §4.2 gives its contents, including `origin_event` on every object,
+> which is absent here. Freeze one of the two, not both.*
 
 ```python
 # contracts.py — FROZEN at 00:30. Changing this blocks both people.
@@ -316,6 +381,14 @@ Decide this now so it is not decided at hour nine under pressure.
 **Never cut:** the predicate-before-code split, the placebo check, the carry-on
 control, `queries_run`. Each of those is what stops a specific, likely, visible
 failure — and each is under thirty lines.
+
+> *2026-08-16 — the SPEC has a different never-cut list and the two do not
+> overlap at all.* SPEC §8.4: **the trace, the ledger, invalidation, replay, the
+> two fixtures** — *"cutting the trace saves an hour tonight and costs three
+> tomorrow, because every subsequent bug becomes a guess."* Nothing in this
+> file's list is in that one and nothing in that one is here. That is not a
+> disagreement anybody had; it is two lists written for two different failures,
+> and it needs to become one list before either is used as a cut order.
 
 ---
 

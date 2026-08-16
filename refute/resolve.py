@@ -32,32 +32,16 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import Iterable, Mapping, Protocol
 
-from .assays.evidence import BlockedReason
-
-
-class Provenance(Enum):
-    """Where a number came from. Ordered strongest first.
-
-    `PRIMARY` outranks `LITERATURE` deliberately: a value counted off primary
-    records - a lab notebook, a robot's execution log - is stronger evidence
-    than one read out of a paper, because it has not passed through the
-    publication filter that removes the runs that failed.
-    """
-
-    MEASURED = "measured"      # fitted to primary data held in this repository
-    PRIMARY = "primary"        # counted off primary records (ELN, robot log)
-    LITERATURE = "literature"  # extracted from a published methods section
-    DERIVED = "derived"        # computed from reported quantities
-    ASSUMED = "assumed"        # nobody's measurement; a stand-in with a range
-
-    @property
-    def is_evidence(self) -> bool:
-        """False for ASSUMED. A twin built mostly of stand-ins is not a twin."""
-        return self is not Provenance.ASSUMED
+# `Provenance` is defined in `assays.evidence` and re-exported here, which is
+# the reverse of where it looks like it belongs. This module already imports
+# `BlockedReason` from there, and `Evidence` needs to name a provenance tier, so
+# defining it here would be an unconditional import cycle rather than a latent
+# one. Re-exporting keeps `from refute.resolve import Provenance` working: it is
+# the same object, and this is still the module that routes on it.
+from .assays.evidence import BlockedReason, Provenance
 
 
 # Tier 0 is assay-blind arithmetic, so its requirements are not per-protocol.
@@ -102,6 +86,17 @@ class Resolution:
     # -- blocked --
     reason: BlockedReason | None = None
     queries_run: tuple[str, ...] = ()
+    # -- provenance of the record itself, not of the number --
+    # The trace id of the event that produced this entry. `Finding` and
+    # `Handoff` both carry one and `Resolution` did not, so the chain ended
+    # exactly here - at the point a number stops being evidence and starts
+    # being an input the gate routes on. That is the worst place to lose it:
+    # every question worth asking about a verdict ("where did this variance
+    # come from, and did anybody search for it") is a question about the entry
+    # the verdict was computed from. Additive and defaulted, so a resolver that
+    # does not trace is unaffected and nothing that already reads this type has
+    # to change.
+    origin_event: str = ""
 
     def __post_init__(self) -> None:
         if self.value is not None and self.reason is not None:
@@ -243,6 +238,10 @@ def resolution_from_dict(key: str, d: dict) -> Resolution:
         plausible_range=tuple(rng) if rng else None,
         reason=BlockedReason(d["reason"]) if d.get("reason") else None,
         queries_run=tuple(d.get("queries_run", ())),
+        # Read back when a fixture carries one, so a resolution replayed from
+        # disk still points at the event that produced it. Absent from every
+        # fixture written so far, which is what the default is for.
+        origin_event=d.get("origin_event", ""),
     )
 
 

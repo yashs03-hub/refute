@@ -111,22 +111,97 @@ def requirements_for(protocol: AssayProtocol) -> tuple[Requirement, ...]:
     return tuple(out)
 
 
+def _tier_coverage(resolutions: ResolutionSet, keys: tuple[str, ...]) -> str:
+    """How much of one tier's requirement set the gate can use, and why.
+
+    The numerator is coverage - keys that do not block - and not the count of
+    keys carrying a number, because coverage is what the gate routes on. The two
+    differ: a `CONTEXT_DEPENDENT` key has no value and still does not block, so
+    counting values would report 9/10 for a set the gate calls complete and put
+    the line straight back into contradicting the route below it.
+
+    The parenthetical names the three ways a count can be true and still not
+    mean what it looks like - unsearched, ill-posed, stand-in - because each one
+    changes what the verdict downstream is worth, and a bare fraction hides all
+    three.
+    """
+    covered = len(keys) - len(resolutions.missing(keys))
+    unsearched = set(resolutions.unsearched()) & set(keys)
+    assumed = resolutions.assumed(keys)
+    # `swept` is the union of assumed and ill-posed. Subtracting the assumed
+    # leaves the context-dependent ones, which is the distinction worth drawing:
+    # a stand-in is somebody's guess, an ill-posed key is nobody's fault.
+    ill_posed = set(resolutions.swept(keys)) - set(assumed)
+
+    detail = []
+    if unsearched:
+        detail.append(f"{len(unsearched)} not yet searched")
+    if ill_posed:
+        detail.append(f"{len(ill_posed)} ill-posed as a scalar")
+    if assumed:
+        detail.append(f"{len(assumed)} stand-in{'s' if len(assumed) > 1 else ''}")
+    suffix = f" ({', '.join(detail)})" if detail else ""
+    return f"{covered}/{len(keys)} covered{suffix}"
+
+
 def _resolve_line(
     resolutions: ResolutionSet, requirements: tuple[Requirement, ...], resolver_name: str
-) -> str:
-    keys = [r.key for r in requirements]
-    resolved = sum(
-        1 for k in keys
-        if (r := resolutions.resolutions.get(k)) is not None and r.resolved
+) -> list[str]:
+    """Coverage, reported per tier, because the two tiers are alternatives.
+
+    Reporting one fraction over the union was correct arithmetic and a wrong
+    sentence. `requirements_for` hands both sets to the resolver in one pass, so
+    the union has fourteen keys for `fibrin_contracture` - but nothing ever needs
+    all fourteen. Tier 1 covered is enough to build the twin, tier 0 covered is
+    enough for the fallback, and a set that covers all of one and none of the
+    other is fully answered rather than half answered. "10/14" said the opposite,
+    and said it immediately above a full-confidence tier-1 route.
+
+    Split exactly the way the gate splits it - tier 1 off the protocol's
+    declarations, tier 0 off `tier0_needs()` - so the line cannot disagree with
+    the route it introduces. A key both tiers require is counted in both, which
+    is what each set independently needs, even though `requirements_for`
+    deduplicates it for the resolver.
+    """
+    tier1 = tuple(r.key for r in requirements if r.tier == "tier1")
+    tier0 = tuple(r.key for r in tier0_needs())
+    return [
+        f"resolve: tier-1 {_tier_coverage(resolutions, tier1)}, "
+        f"tier-0 {_tier_coverage(resolutions, tier0)} - by '{resolver_name}' "
+        f"(requirement set {resolutions.requirement_version})",
+        f"  two alternative sets, not one list of {len(requirements)}: tier 1 "
+        f"builds the twin, tier 0 is the assay-blind fallback.",
+    ]
+
+
+def _over_assumed_note(
+    protocol: AssayProtocol, resolutions: ResolutionSet
+) -> str | None:
+    """Why a fully covered tier-1 set did not build a twin anyway.
+
+    The gate states this cause on the tier-0 route and not on the refusal, where
+    its `why` names only the tier-0 gaps. That was survivable while the resolve
+    line reported one fraction over both sets, because tier-1 coverage was not
+    visible on its own. Reported per tier it is: `over_assumed.json` now prints
+    "tier-1 10/10 covered" two lines above a refusal, and without this the
+    reader has to guess which of the two the router got wrong.
+
+    Neither. Coverage is necessary and not sufficient, and the condition this
+    set fails is the other one. Asked of `resolutions` with the gate's own
+    predicate rather than against a threshold copied down here, so the two
+    cannot come to disagree about where the line sits.
+    """
+    keys = tuple(r.key for r in tier1_needs(protocol))
+    if not keys or not resolutions.covers(keys):
+        return None
+    if not resolutions.over_assumed(keys):
+        return None
+    assumed = len(resolutions.assumed(keys))
+    return (
+        f"  tier 1 is covered and still cannot be built: {assumed} of its "
+        f"{len(keys)} constants are stand-ins rather than anybody's "
+        f"measurement, so the twin would report its own priors."
     )
-    line = (
-        f"resolve: {resolved}/{len(keys)} required quantities resolved by "
-        f"'{resolver_name}' (requirement set {resolutions.requirement_version})"
-    )
-    unsearched = resolutions.unsearched()
-    if unsearched:
-        line += f"; {len(unsearched)} not yet searched"
-    return line
 
 
 def _version_warning(protocol: AssayProtocol, resolutions: ResolutionSet) -> str | None:
@@ -526,7 +601,7 @@ def run(
     requirements = requirements_for(protocol)
     resolutions = resolver.resolve(protocol.key, requirements)
 
-    narrative = [_resolve_line(resolutions, requirements, resolver.name)]
+    narrative = _resolve_line(resolutions, requirements, resolver.name)
     if warning := _version_warning(protocol, resolutions):
         narrative.append(warning)
 
@@ -553,6 +628,8 @@ def run(
     if decision.route is Route.OUT_OF_SCOPE:
         return _out_of_scope(decision, narrative)
     if decision.route is Route.REFUSE:
+        if note := _over_assumed_note(protocol, resolutions):
+            narrative.append(note)
         missing = decision.missing or tuple(
             resolutions.missing(r.key for r in tier0_needs())
         )

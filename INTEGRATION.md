@@ -1,9 +1,52 @@
 # Grounding agent × refute — how they compose
 
+> ## ⚠️ SUPERSEDED 2026-08-16 — read the SPEC first
+>
+> **The current agreement is `15 - SPEC - the whole system.md`.** For the seam in
+> code, read `HANDOFF.md`. This file is kept because most of its argument still
+> holds and because the part that did not is worth being able to point at.
+>
+> **What changed.** This document was written against the teammates' *earlier*
+> scope, in which the grounding agent was a retrieval step feeding refute's own
+> calibration — §5 here offers `CalibrationSource` as the seam, which makes the
+> other half a *backend* of this repository. The agreement since is a **two-layer
+> split**: layer 1 answers everything about a hypothesis that can be answered
+> without a bench — data and literature, to exhaustion — and hands over what it
+> could not settle. Layer 2, this repository, designs the experiment for that
+> residual. Layer 1 is the stage *before* refute, not a source plugged into it,
+> and it may terminate without a handoff at all. That case did not exist in this
+> document.
+>
+> **Still transfers, unchanged:**
+> - §2, the two failure classes. Knowledge defect versus design defect is the
+>   reason there are two layers, and the SPEC restates it in its §2.
+> - §3's rule: *the model extracts, the simulator judges.* Nothing in the SPEC
+>   says this in these words and it is the load-bearing constraint on both
+>   layers.
+> - §4, the Experiment 4 demo arc, and its numbers — 9% power, 0% → 97%
+>   testable. Unaffected by the re-scope.
+> - §5's `Blocked` taxonomy, which is still the most transferable thing here. It
+>   has since gained a sixth reason, `NOT_SUPPLIED` — see `assays/evidence.py`.
+> - §5's 35-constant work queue, still 35 across six scaffolds.
+> - §9, the Track B framing.
+>
+> **Superseded, and where to look instead:**
+> - §3's composition diagram and §5's "agree these two shapes" → SPEC §5 and
+>   `refute/handoff.py`. The agreed crossing is `Handoff` / `Finding` /
+>   `OpenItem` into `Resolution` / `ResolutionSet`, not `CalibrationSource` and
+>   `Evidence`.
+> - §7's Workstream B. Item 1, requirements extraction, is built —
+>   `refute/requirements.py`. Item 2, the `PRIMARY` provenance tag, is built. Item
+>   3, the MCP surface, is not.
+> - §8's two asks. The Paperclip credential exists and works. The exp4 authorship
+>   gate was cleared by the owner on 2026-08-15 (`cases/exp4/PROVENANCE.md`);
+>   repository visibility remains a separate decision nobody has taken.
+> - The test count below. It read 321 when written; the suite is several hundred
+>   larger and moving hour to hour. Run it rather than quoting this file.
+
 For the shared repo. Written from the refute side by someone who knows that half
 cold, so treat the claims about *your* half as proposals and the claims about
-refute as checkable — everything here is backed by code in this repository with
-321 passing tests.
+refute as checkable — everything here is backed by code in this repository.
 
 ---
 

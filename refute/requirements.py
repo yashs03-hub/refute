@@ -28,20 +28,26 @@ registry it answers. It is a `hashlib` digest and not Python's `hash()`, which
 is salted per process: a version that changed between two runs of the same code
 would mark every stored resolution set stale on a restart, which is worse than
 having no version at all because it would be discovered late and intermittently.
+
+The digest itself lives in `digest.py`, which holds nothing but the algorithm
+and imports nothing but `hashlib`. `adapt` and `handoff` compute the same digest
+over the key lists they were actually handed, and until that module existed all
+three carried their own copy of it. This one is the definition - it is the
+registry's answer - and the other two must agree with it exactly or the pipeline
+reports a version drift that is not there.
 """
 
 from __future__ import annotations
 
-import hashlib
 import re
 
 from .assays.base import AssayProtocol, Constant
-from .resolve import TIER0_NEEDS, Requirement
 
-# Length of the `requirement_version` digest. Twelve hex characters is ~48 bits,
-# which is far more than the handful of requirement sets that will ever exist,
-# and short enough to appear in a filename or a log line without wrapping.
-VERSION_CHARS = 12
+# `VERSION_CHARS` is imported rather than declared, and stays importable from
+# here for the callers that already read it off this module. The length is part
+# of the digest contract, so it belongs next to the function that applies it.
+from .digest import VERSION_CHARS, requirement_digest  # noqa: F401  (re-export)
+from .resolve import TIER0_NEEDS, Requirement
 
 # Provenance strings on a `Constant` are written "TAG - what it is". The tag
 # describes the state of calibration, not the quantity, so it is stripped when
@@ -171,18 +177,15 @@ def tier0_needs() -> tuple[Requirement, ...]:
 def requirement_version(protocol: AssayProtocol) -> str:
     """A short stable identifier for `protocol`'s tier-1 requirement set.
 
-    Over the sorted key list only. Units and descriptions are prose about the
-    same requirement, and rewording one should not invalidate every resolution
-    set that answered it - whereas adding or removing a key genuinely does mean
-    an old answer is no longer total over the new set.
+    Over the declared constant names only - `digest.requirement_digest` states
+    why the units and descriptions are left out of it, and why it sorts.
 
-    Sorted, so that reordering the declarations does not change the version
-    either. `tier1_needs` preserves declaration order for readability; the
-    version deliberately does not depend on it.
+    This is the registry's answer, and therefore the one the others are checked
+    against: `adapt` and `handoff` run the same digest over the keys they were
+    handed, and `pipeline._version_warning` reports the difference when a stored
+    answer is total over some other list than this one.
     """
-    keys = sorted(c.name for c in protocol.all_constants())
-    digest = hashlib.sha256("\n".join(keys).encode("utf-8")).hexdigest()
-    return digest[:VERSION_CHARS]
+    return requirement_digest(c.name for c in protocol.all_constants())
 
 
 # --- description matching ---------------------------------------------------

@@ -1,7 +1,16 @@
 {
   "_note": [
-    "Every tier-1 requirement of fibrin_contracture resolved from evidence.",
-    "Routes to: build the twin, sweep nothing, report no gaps.",
+    "Every tier-1 requirement of fibrin_contracture resolved from evidence,",
+    "and the four tier-0 quantities alongside them.",
+    "Routes to: build the twin, sweep nothing, report no gaps. Tier 0 being",
+    "covered too does not change that - tier 1 is tried first, and the fallback",
+    "is simply never needed.",
+    "Total over BOTH requirement sets, which is the convention every fixture in",
+    "this directory follows: tier-1 keys from the protocol's declarations plus",
+    "the four tier-0 keys, each either resolved or carrying a blocked reason.",
+    "A file total over one set and silent on the other reads as partial",
+    "coverage when the pipeline counts it, and is a trap for whoever writes the",
+    "next fixture.",
     "The gate must not read any value in this file. The nine MEASURED numbers",
     "are the real fits in refute/calibration.py so that nothing here is",
     "invented; they are present only because Resolution refuses an entry that",
@@ -71,6 +80,32 @@
       "units": "probability",
       "provenance": "measured",
       "source": "cases/exp4/PROVENANCE.md"
+    },
+    "effect_size": {
+      "value": 8.0,
+      "units": "fill-points",
+      "provenance": "assumed",
+      "source": "FIXTURE:assumed - the smallest difference that would change a decision. Experiment 4 never measured one; fibrinolysis removed the endpoint first.",
+      "plausible_range": [4.0, 15.0]
+    },
+    "within_arm_sd": {
+      "value": 2.4,
+      "units": "fill-points",
+      "provenance": "primary",
+      "source": "cases/exp4/data/observed_timecourse.csv - within-arm SD at 120 h"
+    },
+    "alpha": {
+      "value": 0.05,
+      "units": "probability",
+      "provenance": "assumed",
+      "source": "refute/tier0.py DEFAULT_ALPHA - conventional two-sided threshold, stated rather than inherited",
+      "plausible_range": [0.01, 0.05]
+    },
+    "n_per_arm": {
+      "value": 3.0,
+      "units": "wells per arm",
+      "provenance": "primary",
+      "source": "cases/exp4/PROVENANCE.md - 12 wells across 4 conditions"
     }
   },
   "unmodelled_mentions": []

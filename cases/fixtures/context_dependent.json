@@ -7,7 +7,14 @@
     "prose: sweep it, never report a single value.",
     "Routes to: build the twin, sweep this one requirement, and report the",
     "verdict as sensitive to it. It must NOT route as a gap.",
-    "value is null here and the route still resolves, which is the property."
+    "value is null here and the route still resolves, which is the property.",
+    "It is also why the resolve line counts coverage rather than values: nine",
+    "of the ten tier-1 keys carry a number and all ten are covered, so a count",
+    "of numbers would report 9/10 directly above a gate line saying every",
+    "tier-1 constant resolved.",
+    "Total over both requirement sets. The four tier-0 quantities are in hand",
+    "and change nothing here - tier 1 is tried first - but a fixture that",
+    "covered one set and stayed silent on the other would report as partial."
   ],
   "assay_key": "fibrin_contracture",
   "requirement_version": "825ff3a19ed5",
@@ -73,6 +80,32 @@
       "units": "probability",
       "provenance": "measured",
       "source": "cases/exp4/PROVENANCE.md"
+    },
+    "effect_size": {
+      "value": 8.0,
+      "units": "fill-points",
+      "provenance": "assumed",
+      "source": "FIXTURE:assumed - the smallest difference that would change a decision. Experiment 4 never measured one; fibrinolysis removed the endpoint first.",
+      "plausible_range": [4.0, 15.0]
+    },
+    "within_arm_sd": {
+      "value": 2.4,
+      "units": "fill-points",
+      "provenance": "primary",
+      "source": "cases/exp4/data/observed_timecourse.csv - within-arm SD at 120 h"
+    },
+    "alpha": {
+      "value": 0.05,
+      "units": "probability",
+      "provenance": "assumed",
+      "source": "refute/tier0.py DEFAULT_ALPHA - conventional two-sided threshold, stated rather than inherited",
+      "plausible_range": [0.01, 0.05]
+    },
+    "n_per_arm": {
+      "value": 3.0,
+      "units": "wells per arm",
+      "provenance": "primary",
+      "source": "cases/exp4/PROVENANCE.md - 12 wells across 4 conditions"
     }
   },
   "unmodelled_mentions": []
