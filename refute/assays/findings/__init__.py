@@ -23,6 +23,7 @@ find does not flatter the result, it destroys it.
 from __future__ import annotations
 
 from . import (
+    apoptosis_resistance,
     bleomycin_lung,
     cell_derived_matrix,
     fibrosis_on_chip,
@@ -31,6 +32,7 @@ from . import (
 )
 
 __all__ = [
+    "apoptosis_resistance",
     "bleomycin_lung",
     "cell_derived_matrix",
     "fibrosis_on_chip",

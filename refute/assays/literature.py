@@ -164,5 +164,6 @@ REPORTS: dict[str, CalibrationReport] = {
         findings.cell_derived_matrix.REPORT,
         findings.fibrosis_on_chip.REPORT,
         findings.stiffness_drift.REPORT,
+        findings.apoptosis_resistance.REPORT,
     )
 }

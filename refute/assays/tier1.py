@@ -12,7 +12,7 @@ call, see that protocol's `HazardSpec` for the reasoning and its limits):
 
     coupled to the phenotype        traction_force, scar_in_a_jar,
                                     cell_derived_matrix, bleomycin_lung*,
-                                    stiffness_drift**
+                                    stiffness_drift**, apoptosis_resistance
     NOT coupled                     fibrosis_on_chip  (applied cyclic strain -
                                                        a parameter you set)
 
@@ -461,17 +461,8 @@ STIFFNESS_DRIFT = AssayProtocol(
     ),
 )
 
-
 # ---------------------------------------------------------------------------
-# 7. Apoptosis/necrosis resistance - added 2026-08-16 as a candidate third
-# mechanistic twin. Tests whether the activated (fibrotic) phenotype resists
-# an apoptotic/necrotic challenge better than the quiescent one - a
-# well-established finding in fibrosis biology (myofibroblast apoptosis
-# resistance is the textbook reason fibrosis becomes progressive: normal
-# wound healing resolves via myofibroblast apoptosis, and fibrotic disease is
-# partly a failure of that clearance), but general knowledge is not a
-# calibration - this scaffold needs its own literature sweep for real
-# quoted numbers before any twin gets built on it.
+# 7. Apoptosis/necrosis resistance - candidate third mechanistic twin
 # ---------------------------------------------------------------------------
 
 APOPTOSIS_RESISTANCE = AssayProtocol(
