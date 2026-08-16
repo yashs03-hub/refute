@@ -321,3 +321,40 @@ def _stub_importlib(import_module):
     stub = type(importlib)("importlib_stub")
     stub.import_module = import_module
     return stub
+
+
+# --- multi-assay twin CLI wiring ---------------------------------------------
+
+
+def test_baseline_with_bleomycin_assay(capsys):
+    code = main(["baseline", "--assay", "bleomycin_lung", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "20-animal design" in out
+    assert "power to recover injected MSC effect" in out
+
+
+def test_optimize_bleomycin_requires_msc_route(capsys):
+    code = main(["optimize", "--assay", "bleomycin_lung", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "ROUTE REQUIRED" in out
+
+
+def test_optimize_bleomycin_with_route(capsys):
+    code = main([
+        "optimize", "--assay", "bleomycin_lung", "--msc-route", "IT",
+        "--power", "0.01", "--testable", "0.01", "--allow-assumption-sensitive",
+        "--sims", str(SIMS)
+    ])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "WINNER" in out or "OPTIMIZE" in out
+
+
+def test_advise_with_bleomycin_assay(capsys):
+    code = main(["advise", "--assay", "bleomycin_lung", "--sims", str(SIMS)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "ADVICE" in out
+

@@ -43,16 +43,28 @@ def _report_out_of_scope(exc: OutOfTwinScopeError) -> None:
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
-    design = EXPERIMENT_4_AS_RUN
+    from .twins import get_twin
+
+    twin = get_twin(args.assay)
+    design = twin.default_design
     if args.design:
-        design = DesignSpec.model_validate(json.loads(open(args.design).read()))
+        design = twin.design_spec_type.model_validate(json.loads(open(args.design).read()))
     try:
-        score = score_design(design, n_sims=args.sims)
-    except OutOfTwinScopeError as exc:
-        _report_out_of_scope(exc)
-        return 2
-    _print(f"{design.total_wells}-well design, endpoint {design.endpoint_time_h:.0f} h",
-           score.summary())
+        score = twin.score_fn(design, n_sims=args.sims)
+    except (OutOfTwinScopeError, ValueError) as exc:
+        if "outside this twin's scope" in str(exc) or isinstance(exc, OutOfTwinScopeError):
+            _report_out_of_scope(exc)
+            return 2
+        raise
+
+    if hasattr(design, "total_wells"):
+        unit_str = f"{design.total_wells}-well design"
+        ep_str = f"endpoint {design.endpoint_time_h:.0f} h"
+    else:
+        unit_str = f"{design.total_animals}-animal design"
+        ep_str = f"endpoint day {design.endpoint_day:.0f}"
+
+    _print(f"{unit_str}, {ep_str}", score.summary())
     return 0
 
 
@@ -246,17 +258,20 @@ def cmd_infer(args: argparse.Namespace) -> int:
 
 def cmd_advise(args: argparse.Namespace) -> int:
     """What to change, with what each change would actually do."""
-    from .advise import advise
+    from .twins import get_twin
 
-    design = EXPERIMENT_4_AS_RUN
+    twin = get_twin(args.assay)
+    design = twin.default_design
     if args.design:
-        design = DesignSpec.model_validate(json.loads(open(args.design).read()))
+        design = twin.design_spec_type.model_validate(json.loads(open(args.design).read()))
 
     try:
-        result = advise(design, n_sims=args.sims)
-    except OutOfTwinScopeError as exc:
-        _report_out_of_scope(exc)
-        return 2
+        result = twin.advise_fn(design, n_sims=args.sims)
+    except (OutOfTwinScopeError, ValueError) as exc:
+        if "outside this twin's scope" in str(exc) or isinstance(exc, OutOfTwinScopeError):
+            _report_out_of_scope(exc)
+            return 2
+        raise
 
     _print("ADVICE", result.summary())
 
@@ -267,7 +282,7 @@ def cmd_advise(args: argparse.Namespace) -> int:
                 "CHANGES THAT DID NOT HELP",
                 "\n\n".join(s.line() for s in rest)
                 + "\n\nReported because a change that does nothing is worth "
-                "knowing about\nbefore you spend a plate on it.",
+                "knowing about\nbefore you spend capacity on it.",
             )
     return 0
 
@@ -827,19 +842,58 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     """The cheapest design that clears a power target - a human-facing search
     against the twin. See `optimize.py`'s docstring before wiring this into
     anything the agent under test can reach: it must never be."""
-    from .optimize import CANONICAL_CONDITIONS, optimize_design
+    from .calibration import PLATE_WELLS
+    from .twins import get_twin
 
-    conditions = tuple(args.conditions.split(",")) if args.conditions else CANONICAL_CONDITIONS
-    result = optimize_design(
-        antifibrinolytic=args.antifibrinolytic,
-        target_power=args.power,
-        target_testable=args.testable,
-        capacity=args.capacity,
-        conditions=conditions,
-        endpoint_time_h=args.endpoint,
-        allow_assumption_sensitive=args.allow_assumption_sensitive,
-        n_sims=args.sims,
-    )
+    twin = get_twin(args.assay)
+    if twin.optimize_fn is None:
+        _print("CANNOT OPTIMIZE", f"No optimizer registered for assay '{args.assay}'")
+        return 2
+
+    if args.assay == "bleomycin_lung":
+        if not args.msc_route:
+            _print(
+                "ROUTE REQUIRED",
+                "--msc-route ('IT' or 'IV') must be explicitly specified for bleomycin_lung.\n"
+                "The search never decides the route for you.",
+            )
+            return 2
+        conditions = (
+            tuple(args.conditions.split(","))
+            if args.conditions
+            else ("bleomycin_only", "bleomycin_MSC")
+        )
+        try:
+            result = twin.optimize_fn(
+                msc_route=args.msc_route,
+                target_power=args.power,
+                target_testable=args.testable,
+                capacity=args.capacity if args.capacity != PLATE_WELLS else twin.default_capacity,
+                conditions=conditions,
+                endpoint_day=args.endpoint if args.endpoint != 168.0 else 21.0,
+                allow_assumption_sensitive=args.allow_assumption_sensitive,
+                n_sims=args.sims,
+            )
+        except ValueError as exc:
+            _print("CANNOT OPTIMIZE", str(exc))
+            return 2
+    else:
+        conditions = (
+            tuple(args.conditions.split(","))
+            if args.conditions
+            else ("N-SS", "N-T", "N-CM", "N-CM+T")
+        )
+        result = twin.optimize_fn(
+            antifibrinolytic=args.antifibrinolytic,
+            target_power=args.power,
+            target_testable=args.testable,
+            capacity=args.capacity,
+            conditions=conditions,
+            endpoint_time_h=args.endpoint,
+            allow_assumption_sensitive=args.allow_assumption_sensitive,
+            n_sims=args.sims,
+        )
+
     _print("OPTIMIZE", result.summary())
     return 0 if result.found else 2
 
@@ -1012,6 +1066,9 @@ def main(argv: list[str] | None = None) -> int:
         "baseline", parents=[common], help="score a design (default: Experiment 4)"
     )
     p_base.add_argument("--design", help="path to a DesignSpec JSON file")
+    p_base.add_argument(
+        "--assay", default="fibrin_contracture", help="assay twin key (default: fibrin_contracture)"
+    )
     p_base.set_defaults(func=cmd_baseline)
 
     sub.add_parser(
@@ -1049,14 +1106,21 @@ def main(argv: list[str] | None = None) -> int:
         help="cheapest design that clears a power target (human-facing only)",
     )
     p_opt.add_argument(
+        "--assay", default="fibrin_contracture", help="assay twin key (default: fibrin_contracture)"
+    )
+    p_opt.add_argument(
         "--antifibrinolytic", action="store_true",
-        help="required, explicit - the search never decides this for you (PLAN 9.1)",
+        help="required for fibrin_contracture - search never decides this",
+    )
+    p_opt.add_argument(
+        "--msc-route", choices=("IT", "IV"), default=None,
+        help="required for bleomycin_lung ('IT' or 'IV') - search never decides this",
     )
     p_opt.add_argument("--power", type=float, default=0.80, help="target power")
     p_opt.add_argument("--testable", type=float, default=0.80, help="target testable rate")
-    p_opt.add_argument("--capacity", type=int, default=12, help="wells available")
-    p_opt.add_argument("--conditions", default="", help="comma-separated, default the 4 canonical arms")
-    p_opt.add_argument("--endpoint", type=float, default=168.0, help="hours since cast")
+    p_opt.add_argument("--capacity", type=int, default=12, help="wells/units available")
+    p_opt.add_argument("--conditions", default="", help="comma-separated, default canonical arms")
+    p_opt.add_argument("--endpoint", type=float, default=168.0, help="endpoint hours/days")
     p_opt.add_argument(
         "--allow-assumption-sensitive", action="store_true",
         help="let a winner stand even if its verdict depends on an ASSUMED constant",
@@ -1134,9 +1198,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_adv.add_argument("--design", help="path to a DesignSpec JSON file")
     p_adv.add_argument(
+        "--assay", default="fibrin_contracture", help="assay twin key (default: fibrin_contracture)"
+    )
+    p_adv.add_argument(
         "--all", action="store_true", help="also list changes that did not help"
     )
     p_adv.set_defaults(func=cmd_advise)
+
 
     p_route = sub.add_parser(
         "route",

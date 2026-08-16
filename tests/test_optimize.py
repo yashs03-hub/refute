@@ -25,28 +25,32 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # -- the boundary that must not move -----------------------------------------
 
 
+@pytest.mark.parametrize("opt_module_name", ["optimize", "bleomycin_optimize"])
 @pytest.mark.parametrize("module", ["agent.py", "environment.py", "api.py"])
-def test_the_agent_facing_surface_never_imports_optimize(module: str):
+def test_the_agent_facing_surface_never_imports_optimize(module: str, opt_module_name: str):
     """§9.1: handing the optimizer to the harness turns the benchmark into a
     search against `twin.py`. A source-text check rather than a runtime import
     check on purpose - this must fail on a lazy `from .optimize import ...`
     buried inside a function body too, not only on a module-level import."""
     text = (REPO_ROOT / "refute" / module).read_text()
-    assert "optimize" not in text, (
-        f"{module} references `optimize` - the CLI is the only place this "
-        "module may be reachable from. See optimize.py's module docstring."
+    assert opt_module_name not in text, (
+        f"{module} references `{opt_module_name}` - the CLI is the only place this "
+        "module may be reachable from. See optimize.py's / bleomycin_optimize.py's module docstring."
     )
 
 
-def test_optimize_module_states_the_boundary_in_its_own_docstring():
+@pytest.mark.parametrize("opt_mod", ["refute.optimize", "refute.bleomycin_optimize"])
+def test_optimize_module_states_the_boundary_in_its_own_docstring(opt_mod: str):
     """The invariant has to be legible at the point it could be violated, not
     only in a test file nobody reads while adding a feature."""
-    import refute.optimize as optimize_module
+    import importlib
+    mod = importlib.import_module(opt_mod)
 
-    doc = optimize_module.__doc__ or ""
+    doc = mod.__doc__ or ""
     assert "agent.py" in doc
     assert "environment.py" in doc
     assert "api.py" in doc
+
 
 
 # -- antifibrinolytic is never discovered, only stated -----------------------

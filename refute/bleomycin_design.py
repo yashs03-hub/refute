@@ -108,10 +108,21 @@ class OutOfTwinScopeError(ValueError):
         )
 
 
+DEFAULT_BLEOMYCIN_DESIGN = BleomycinDesignSpec(
+    conditions=[BLEOMYCIN_ONLY, BLEOMYCIN_MSC],
+    replicates_per_condition=10,
+    msc_dosing_day=3.0,
+    msc_route="IT",
+    endpoint_day=21.0,
+)
+
+
 __all__ = [
     "BLEOMYCIN_MSC",
     "BLEOMYCIN_ONLY",
     "CANONICAL_CONDITIONS",
     "BleomycinDesignSpec",
+    "DEFAULT_BLEOMYCIN_DESIGN",
     "OutOfTwinScopeError",
 ]
+
