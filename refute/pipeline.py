@@ -56,6 +56,8 @@ from .requirements import requirement_version, tier0_needs, tier1_needs
 from .resolve import Requirement, ResolutionSet, Resolver
 from .score import score_design
 from .tier0 import DEFAULT_ALPHA, Tier0Design, Tier0InputError, score_tier0
+from .twins import TWINS
+
 
 # The one phrase the terminal state is recognised by, here rather than inline so
 # that the wording cannot drift between the module that writes it and the test
@@ -436,14 +438,19 @@ def _run_tier0(
 
 
 def _run_tier1(
-    design: DesignSpec,
+    design: Any,
+    protocol: AssayProtocol,
     decision: RouteDecision,
     narrative: list[str],
     n_sims: int,
 ) -> PipelineResult:
     """Simulate, then look for a change that helps, then say if none does."""
+    twin = TWINS.get(protocol.key)
+    score_fn = twin.score_fn if twin else score_design
+    advise_fn = twin.advise_fn if twin and twin.advise_fn else advise
+
     try:
-        score = score_design(design, n_sims=n_sims)
+        score = score_fn(design, n_sims=n_sims)
     except OutOfTwinScopeError as exc:
         # The gate is supposed to have caught this by comparing the design
         # against the protocol. If it reaches here the two disagree, and the
@@ -493,7 +500,7 @@ def _run_tier1(
         # their refusal failed, pushing them toward a plate they have just
         # correctly argued cannot work.
         narrative += [
-            "simulate: nothing was simulated - this design assigns no wells.",
+            "simulate: nothing was simulated - this design assigns no wells/animals.",
             "outcome: DECLINED - the design declines to run the experiment.",
             "  That is a recognised answer, not a failure, and it is the same "
             "verdict this",
@@ -505,10 +512,14 @@ def _run_tier1(
             decision=decision, score=score, terminal=True, narrative=narrative
         )
 
+    if hasattr(score, "mean_lysed_fraction"):
+        detail_str = f"{score.mean_lysed_fraction:.0%} of wells lost by the endpoint"
+    else:
+        detail_str = f"mean animals scored {getattr(score, 'mean_animals_scored', 0):.1f}"
+
     narrative.append(
         f"simulate: power {score.power:.0%}, testable {score.testable_rate:.0%}, "
-        f"{score.mean_lysed_fraction:.0%} of wells lost by the endpoint "
-        f"({n_sims} plates)"
+        f"{detail_str} ({n_sims} simulations)"
     )
     if score.verdict_sensitive_to_assumption:
         lo, hi = score.power_range_under_assumptions or (float("nan"),) * 2
@@ -517,7 +528,7 @@ def _run_tier1(
             f"{', '.join(score.assumptions_in_play)}: power spans {lo:.0%}-{hi:.0%}."
         )
 
-    result: Advice = advise(design, n_sims=n_sims)
+    result: Any = advise_fn(design, n_sims=n_sims)
     helpful = result.helpful
     if helpful:
         narrative.append(
@@ -562,14 +573,13 @@ def _run_tier1(
         f"improves this design."
     )
     need = (
-        f"~{score.replicates_needed} wells per arm"
+        f"~{score.replicates_needed} wells/animals per arm"
         if score.replicates_needed > 0
-        else "an unestimable number of wells per arm"
+        else "an unestimable number of units per arm"
     )
     narrative += [
         f"outcome: TERMINAL - the question is {NOT_ANSWERABLE}.",
-        f"  At {score.power:.0%} power the design needs {need}, and the "
-        f"apparatus as calibrated is one {PLATE_WELLS}-well plate.",
+        f"  At {score.power:.0%} power the design needs {need}.",
         "  Every single-lever change was simulated and none of them recovers it.",
         "  This is a fact about the apparatus, not a failure of the search and "
         "not a defect",
@@ -585,7 +595,7 @@ def _run_tier1(
 
 
 def run(
-    design: DesignSpec,
+    design: Any,
     protocol: AssayProtocol,
     resolver: Resolver,
     n_sims: int = 400,
@@ -636,4 +646,5 @@ def run(
         return _refuse(decision, narrative, tuple(missing))
     if decision.route is Route.TIER0:
         return _run_tier0(design, protocol, resolutions, decision, narrative)
-    return _run_tier1(design, decision, narrative, n_sims)
+    return _run_tier1(design, protocol, decision, narrative, n_sims)
+

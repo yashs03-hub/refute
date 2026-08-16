@@ -43,9 +43,11 @@ def _report_out_of_scope(exc: OutOfTwinScopeError) -> None:
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
-    from .twins import get_twin
+    from .twins import DEFAULT_ASSAY, get_twin
 
-    twin = get_twin(args.assay)
+    assay = getattr(args, "assay", DEFAULT_ASSAY)
+    twin = get_twin(assay)
+
     design = twin.default_design
     if args.design:
         design = twin.design_spec_type.model_validate(json.loads(open(args.design).read()))
@@ -258,9 +260,11 @@ def cmd_infer(args: argparse.Namespace) -> int:
 
 def cmd_advise(args: argparse.Namespace) -> int:
     """What to change, with what each change would actually do."""
-    from .twins import get_twin
+    from .twins import DEFAULT_ASSAY, get_twin
 
-    twin = get_twin(args.assay)
+    assay = getattr(args, "assay", DEFAULT_ASSAY)
+    twin = get_twin(assay)
+
     design = twin.default_design
     if args.design:
         design = twin.design_spec_type.model_validate(json.loads(open(args.design).read()))
@@ -843,9 +847,11 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     against the twin. See `optimize.py`'s docstring before wiring this into
     anything the agent under test can reach: it must never be."""
     from .calibration import PLATE_WELLS
-    from .twins import get_twin
+    from .twins import DEFAULT_ASSAY, get_twin
 
-    twin = get_twin(args.assay)
+    assay = getattr(args, "assay", DEFAULT_ASSAY)
+    twin = get_twin(assay)
+
     if twin.optimize_fn is None:
         _print("CANNOT OPTIMIZE", f"No optimizer registered for assay '{args.assay}'")
         return 2
