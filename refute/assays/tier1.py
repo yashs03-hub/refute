@@ -9,10 +9,14 @@ function of elapsed time is real but ordinary.
 being caught by it.** Checked 2026-08-15 against each protocol's own `driver`:
 
     coupled to the phenotype        traction_force, scar_in_a_jar,
-                                    cell_derived_matrix, bleomycin_lung
+                                    cell_derived_matrix, bleomycin_lung*
     NOT coupled                     fibrosis_on_chip  (applied cyclic strain -
                                                        a parameter you set)
                                     stiffness_drift   (time in culture)
+
+    * bleomycin_lung moved to its own module (`bleomycin_lung.py`) 2026-08-16
+      once calibrated - it is no longer defined in this file, but the
+      four-way split above still holds and is kept here for the count.
 
 That matters because the coupled ones carry the property this project is
 actually about: the units that fail are the ones carrying the largest effect, so
@@ -25,14 +29,20 @@ device paper reports.
 So they are kept, but not claimed as instances of the coupled class. If the
 generalisation is ever stated as "one mechanism, six instances", it is four.
 
-Every protocol here is a SCAFFOLD. The structure is declared; the numbers are
-absent and will raise `UncalibratedAssayError` if anything tries to score them.
-Each carries the exact list of constants to extract and a Paperclip query to
-find them - assay failure modes live in methods and troubleshooting sections,
-which is why a full-text index is the right instrument.
+Every protocol still in this file is a SCAFFOLD. The structure is declared;
+the numbers are absent and will raise `UncalibratedAssayError` if anything
+tries to score them. Each carries the exact list of constants to extract and a
+Paperclip query to find them - assay failure modes live in methods and
+troubleshooting sections, which is why a full-text index is the right
+instrument.
 
 As each is calibrated it should move to its own module (as
-`fibrin_contracture.py` did) and its status change to LITERATURE or MEASURED.
+`fibrin_contracture.py` did, and `bleomycin_lung.py` now has) and its status
+change to LITERATURE or MEASURED. **Promoting the registry's constants is not
+the same as the protocol being scoreable** - see `bleomycin_lung.py`'s
+docstring: `twin.py`/`score.py` model exactly one apparatus (the fibrin gel),
+and a LITERATURE-tier protocol needs its OWN simulator before `baseline` or
+`optimize` will do anything meaningful with it.
 """
 
 from __future__ import annotations
@@ -336,87 +346,12 @@ FIBROSIS_ON_CHIP = AssayProtocol(
 
 
 # ---------------------------------------------------------------------------
-# 5. Bleomycin lung fibrosis (in vivo)
+# 5. Bleomycin lung fibrosis (in vivo) - MOVED to its own module, LITERATURE
+# tier, 2026-08-16. See `bleomycin_lung.py`, following the pattern
+# `fibrin_contracture.py` set. Kept out of `TIER1` below for the same reason
+# `FIBRIN_CONTRACTURE` is not in it - both are imported directly into
+# `REGISTRY` by `assays/__init__.py` instead.
 # ---------------------------------------------------------------------------
-
-BLEOMYCIN_LUNG = AssayProtocol(
-    key="bleomycin_lung",
-    name="Bleomycin-induced pulmonary fibrosis (murine)",
-    unit="animal",
-    status=CalibrationStatus.SCAFFOLD,
-    summary=(
-        "Intratracheal or oropharyngeal bleomycin induces lung injury and "
-        "fibrosis over 14-28 days. Readout is Ashcroft score, hydroxyproline, "
-        "or micro-CT density."
-    ),
-    species=ScopeTerm(
-        term="mouse",
-        ontology_id="NCBITaxon:10090",
-        basis=ScopeBasis.STATED,
-        note="'(murine)' is in the protocol name itself.",
-    ),
-    tissue=ScopeTerm(
-        term="lung",
-        basis=ScopeBasis.STATED,
-        note=(
-            "'Lung injury and fibrosis' is in the summary; readout unit is "
-            "'per lung'. No UBERON id verified - left unbound rather than "
-            "guessed."
-        ),
-    ),
-    cell_type=ScopeTerm.unspecified(
-        "whole-organ endpoint (Ashcroft score / hydroxyproline per lung); the "
-        "protocol does not isolate or name a single cell type."
-    ),
-    why_it_matters=(
-        "Where the money is. Effectively every fibrosis drug programme runs it, "
-        "and its mortality is SEVERITY-CORRELATED: the most fibrotic animals die "
-        "before the endpoint, so the measured cohort is the survivors. That is "
-        "textbook treatment-correlated dropout, biasing toward the null, at real "
-        "budget and real ethical cost. Naming this as the generalisation target "
-        "is a stronger claim than building a third in vitro case."
-    ),
-    readout=ReadoutSpec(
-        name="ashcroft_or_hydroxyproline",
-        units="Ashcroft score (or ug hydroxyproline per lung)",
-        direction="increases",
-        destructive=True,
-        constants=(
-            _missing("baseline_score", "Ashcroft", "saline control"),
-            _missing("bleomycin_effect", "Ashcroft", "vehicle-bleomycin arm"),
-            _missing("animal_to_animal_sd", "Ashcroft", "within-arm SD"),
-        ),
-    ),
-    hazard=HazardSpec(
-        mechanism="Mortality / humane endpoint before the scheduled readout",
-        driver="fibrosis severity (the measured phenotype)",
-        driver_is_the_measured_phenotype=True,
-        mitigation="lower bleomycin dose (weakens the model), earlier endpoint",
-        constants=(
-            _missing("mortality_by_day14", "probability", "by bleomycin dose"),
-            _missing("mortality_severity_coupling", "-", "how death scales with severity"),
-        ),
-    ),
-    attrition_constants=(
-        _missing("p_dosing_failure", "probability", "failed intratracheal instillation"),
-    ),
-    calibration_needs=(
-        "Mortality by bleomycin dose and strain, from methods and welfare reporting",
-        "Whether deaths are excluded or carried as censored observations",
-        "Within-arm SD of Ashcroft / hydroxyproline (sets the precision floor)",
-        "Typical group sizes and any published power justification",
-    ),
-    paperclip_query=(
-        "bleomycin pulmonary fibrosis mouse mortality dose strain humane endpoint "
-        "attrition group size methods"
-    ),
-    notes=(
-        "Ethically loaded and worth stating: a twin that reduces the number of "
-        "underpowered or doomed in vivo studies is a 3Rs argument as much as a "
-        "commercial one. Reduction and refinement are exactly what a design "
-        "simulator delivers."
-    ),
-)
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +427,5 @@ TIER1 = (
     SCAR_IN_A_JAR,
     CELL_DERIVED_MATRIX,
     FIBROSIS_ON_CHIP,
-    BLEOMYCIN_LUNG,
     STIFFNESS_DRIFT,
 )

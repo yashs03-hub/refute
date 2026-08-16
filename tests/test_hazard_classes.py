@@ -66,10 +66,17 @@ def test_the_header_admits_the_two_that_do_not_fit():
 
 
 def test_the_generalisation_is_four_not_six():
+    """Was 4 of 5 uncalibrated; `bleomycin_lung` promoted to LITERATURE tier
+    2026-08-16 (see `bleomycin_lung.py`), so it's 3 now. Note what promotion
+    did NOT do: `bleomycin_lung.runnable` is True, but `twin.py`/`score.py`
+    still model only the fibrin apparatus, so being 'calibrated' here means
+    the registry's numbers are real, not that a design against it can
+    actually be scored - see that module's docstring before reading this
+    count as closer to a working four-instance twin than it is."""
     uncalibrated_coupled = {
         k for k in PHENOTYPE_COUPLED if not REGISTRY[k].runnable
     }
-    assert len(uncalibrated_coupled) == 4, (
+    assert len(uncalibrated_coupled) == 3, (
         "a twin parameterised on 'hazard scales with the readout' would cover "
         f"{len(uncalibrated_coupled)} uncalibrated scaffolds, not six"
     )
