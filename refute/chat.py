@@ -214,12 +214,13 @@ class Session:
                     "I can't score this, and that is a limit of the simulator "
                     "rather than a problem with your design:\n  - "
                     + "\n  - ".join(exc.reasons)
-                    + f"\n\nThe twin models {self.twin.name}. For anything else, "
-                    "`refute tier0` still answers the power question from your own "
-                    "effect size and SD."
+                    + "\n\nThe twin models an anchored fibrin gel measured by "
+                    "area. For anything else, `refute tier0` still answers the "
+                    "power question from your own effect size and SD."
                 ),
                 called_model=True,
             )
+
 
         self.design, self.score = spec, score
         if score.declined:
