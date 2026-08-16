@@ -134,6 +134,10 @@ def cmd_assays(args: argparse.Namespace) -> int:
 def cmd_chat(args: argparse.Namespace) -> int:
     """A conversation about a design, where every claim is computed."""
     from .chat import Session
+    from .twins import DEFAULT_ASSAY, get_twin
+
+    assay = getattr(args, "assay", DEFAULT_ASSAY)
+    twin = get_twin(assay)
 
     extractor = None
     if not args.no_model:
@@ -146,7 +150,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
     session = Session(extractor=extractor, n_sims=args.sims, assay=assay)
 
     print("=" * 68)
-    print(f"refute chat ({twin.name}) — describe your experiment; every answer is simulated")
+    print(f"refute chat ({twin.key}) — describe your experiment; every answer is simulated")
     print("=" * 68)
     print(
         "\nDescribe the arms, replicates, when you treat, when you measure and\n"
