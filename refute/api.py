@@ -31,7 +31,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from .bleomycin_design import BleomycinDesignSpec
 from .design import DesignSpec, OutOfTwinScopeError
@@ -144,8 +144,8 @@ class ScoreResponse(BaseModel):
             ),
             n_conditions=getattr(score, "n_conditions", len(getattr(score, "conditions", []))),
             failed=score.failed,
-            infeasible_as_scoped=score.infeasible_as_scoped,
-            feasibility=score.feasibility,
+            infeasible_as_scoped=getattr(score, "infeasible_as_scoped", False),
+            feasibility=getattr(score, "feasibility", "unestimable"),
             declined=score.declined,
             verdict_sensitive_to_assumption=score.verdict_sensitive_to_assumption,
             assumptions_in_play=list(score.assumptions_in_play),
@@ -251,10 +251,14 @@ def healthz() -> dict[str, Any]:
 def post_score(req: ScoreRequest) -> ScoreResponse:
     """Simulate a design. No model is called and no credential is required."""
     twin = get_twin(req.assay)
-    if isinstance(req.design, dict):
-        design = twin.design_spec_type.model_validate(req.design)
-    else:
-        design = req.design
+    try:
+        if isinstance(req.design, BaseModel):
+            design = req.design
+        else:
+            design = twin.design_spec_type.model_validate(req.design)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     return ScoreResponse.of(
         twin.score_fn(design, n_sims=req.n_sims, seed=req.seed)
     )
@@ -383,23 +387,31 @@ def _extract(design_text: str, extractor: str | None, spec_type: type = DesignSp
     if not design_text.strip():
         raise HTTPException(status_code=422, detail="design_text is empty")
 
-    from .intake import extract_design as intake_extract_design
-    from .providers import DEFAULT_EXTRACTOR, get_provider
+    from .agent import extract_design as agent_extract_design
+    from .providers import DEFAULT_EXTRACTOR
 
     spec = _model_spec(extractor, "low") if extractor else DEFAULT_EXTRACTOR
-
-    def model_extractor(text: str) -> Any:
-        return get_provider(spec.provider).parse(
-            [{"role": "user", "content": text}],
-            spec,
-            32000,
-            spec_type,
-        )
-
     try:
-        return intake_extract_design(design_text, extractor=model_extractor, design_spec_type=spec_type)
+        if spec_type is DesignSpec:
+            return agent_extract_design(design_text, extractor=spec)
+        else:
+            from .intake import extract_design as intake_extract_design
+            from .providers import get_provider
+
+            def model_extractor(text: str) -> Any:
+                return get_provider(spec.provider).parse(
+                    [{"role": "user", "content": text}],
+                    spec,
+                    32000,
+                    spec_type,
+                )
+
+            return intake_extract_design(
+                design_text, extractor=model_extractor, design_spec_type=spec_type
+            )
     except Exception as exc:
         raise _provider_error(exc) from exc
+
 
 
 

@@ -85,6 +85,22 @@ class BleomycinScore:
     def verdict(self) -> tuple[bool, bool]:
         return (self.failed, self.testable_rate < 0.5)
 
+    @property
+    def feasibility(self) -> str:
+        if self.declined:
+            return "declined"
+        if self.replicates_needed <= 0:
+            return "unestimable"
+        n_conds = self.n_conditions or 2
+        if self.replicates_needed * n_conds > 40:
+            return "infeasible"
+        return "feasible"
+
+    @property
+    def infeasible_as_scoped(self) -> bool:
+        return self.feasibility == "infeasible"
+
+
     def summary(self) -> str:
         if self.declined:
             return (
