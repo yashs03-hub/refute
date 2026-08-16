@@ -103,8 +103,11 @@ def cmd_assays(args: argparse.Namespace) -> int:
         )
     lines += [
         "",
-        "Only MEASURED protocols can be scored. Scaffolds raise "
-        "UncalibratedAssayError",
+        "Only MEASURED protocols can be scored by `baseline`/`optimize`/`chat`/",
+        "`advise` today - those tools model exactly one apparatus (the fibrin",
+        "gel). A LITERATURE-tier protocol has real registry constants (no",
+        "UncalibratedAssayError) but still has no simulator of its own; see",
+        "that protocol's module docstring. Scaffolds raise UncalibratedAssayError",
         "by design: inventing constants would reintroduce exactly the problem",
         "this benchmark exists to avoid.",
         "",
