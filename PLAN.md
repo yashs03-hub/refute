@@ -79,6 +79,9 @@ downstream half of the two-layer pipeline. Each is tested; none needs a network.
 | Uncertainty propagation over calibration params | 🟡 partial — ASSUMED constants swept at scoring time (§9.1); FITTED ones not yet |
 | Proto integration | ❌ **resolved: do not build** — Proto is sequence-typed (§2) |
 | BenchFlow packaging — `refute` as an eval environment | 🟡 `RefuteEnv` is the interface; packaging as their environment not done (§2) |
+| `vocabulary.py` — species/tissue/cell_type scope fields | ✅ done, 2026-08-16 — all seven protocols populated from name/summary text only, five left honestly `UNSPECIFIED` where the text doesn't say. No guessing; see the module's own "derived, not invented" section |
+| `bleomycin_lung` — promoted to LITERATURE tier | ✅ done, 2026-08-16 — `assays/bleomycin_lung.py`, four constants from the sweep (baseline Ashcroft, effect size, SD, day-14 mortality), two ASSUMED placeholders (`mortality_severity_coupling=0.0`, `p_dosing_failure=0.0`) so `require_runnable()` passes. **Promotion ≠ scoreable** — see the next row |
+| Multi-assay twins — `bleomycin_lung` gets its own simulator | ✅ done, 2026-08-16, four checkpoints + three fix PRs (#13, #15–21). §9.3 corrected below — a second twin *was* built, reversing that section's earlier position. `twins.py` registry dispatches `baseline`/`optimize`/`chat`/`advise`/`api`'s `/score`+`/score/text`/the `intake`→`pipeline` handoff seam by assay key. `refute run` (the agent benchmark loop) stays fibrin-only — deliberate scope line, not a gap, since generalizing it reframes what the benchmark measures |
 
 PRs #1–#3 merged 2026-08-04. The loop runs: propose → extract → simulate →
 revise → extract → simulate, against `openai:gpt-5.5`.
@@ -301,12 +304,13 @@ working artefact that motivates it and gives the dataset a use.
 2. **Run `agent.py` end to end once** on the event's Claude credits. Extraction
    fidelity is the most likely failure point: if the extractor mis-reads a
    design, the twin scores the wrong plate and it looks like the agent's fault.
-3. **Build the optimizer.** Turn `sweep` from a grid that prints a table into a
-   search that returns *the cheapest design achieving a power target* — fewest
-   wells, fewest timepoints, subject to the twin's feasibility constraints.
-   This is both the missing Proto primitive (§2) and the thing that makes this
-   a product rather than a demo: if the bottleneck is the cost of finding out
-   you were wrong, the deliverable is the minimum-cost sufficient experiment.
+3. ✅ **Done, 2026-08-16 — see §0's Optimizer row.** `optimize.py` /
+   `bleomycin_optimize.py` (two independent implementations, one per twin,
+   unified only at the CLI/registry layer — the search spaces genuinely
+   differ, forcing one function to cover both would need a plugin-style
+   abstraction more complex than two parallel, tested functions). Both are
+   tripwire-tested to never be reachable from `agent.py`/`environment.py`/
+   `api.py`.
 4. **Extraction adversarial check.** Hand-write 5 designs with known specs;
    confirm the extractor recovers them. Extraction failure must never be
    scoreable as design failure.
@@ -342,6 +346,21 @@ working artefact that motivates it and gives the dataset a use.
    empty tubes. Same shape: an agent handed that data will confidently explain
    an artifact. **Needs the owner's explicit go-ahead before touching that
    data.**
+9. **Added 2026-08-16, still open, in priority order:**
+   - Promote the other five scaffolds' registry constants the way
+     `bleomycin_lung`'s were (§0) — small, precedented, done once already.
+     None becomes scoreable without its own twin (§9.3) regardless of
+     promotion.
+   - ✅ `stiffness_drift`'s hazard-coupling question (§6.5) — **resolved
+     2026-08-16, owner call.** `driver_is_the_measured_phenotype` flipped to
+     `True`; the tier-1 phenotype-coupled count is five now, not four
+     (`tier1.py`'s header, `tests/test_hazard_classes.py`,
+     `tests/test_assays.py::test_tier1_selection_criterion_holds`).
+   - A third mechanistic twin, candidate raised same day: apoptosis/necrosis
+     resistance in activated vs quiescent fibroblasts. No registry protocol
+     exists yet, not even a scaffold — needs one, plus a real literature
+     sweep for actual effect sizes (the biology is well-established
+     generally; a twin needs quoted numbers, not general knowledge).
 
 ## 4. Deliberately not building
 
@@ -535,18 +554,33 @@ fraction), and `modulus_drift_pct_per_day` plus `drift_depends_on_nominal`
 10.1002/adhm.201901593). `tests/test_calibration_harness.py::
 test_the_asymmetry_holds_in_the_current_record` pins the four by name.
 
-The `stiffness_drift` result carries a second finding: the paper that supplied
+The `stiffness_drift` result carried a second finding: the paper that supplied
 the drift rate also states the drift depends on the presence of encapsulated
-cells, which — if it transfers from that paper's 3D degradable PEG geometry to
-this scaffold's 2D polyacrylamide — would mean `stiffness_drift`'s hazard is
-coupled to the measured phenotype rather than driven only by time and medium
-composition as `HazardSpec` currently declares. Not acted on; flagged in
-`refute/assays/findings/stiffness_drift.py` for a human call, because it
-crosses material and geometry and should not be absorbed silently.
+cells. **Resolved 2026-08-16, owner call:** `stiffness_drift`'s `HazardSpec`
+now declares `driver_is_the_measured_phenotype=True`, moving it into the
+phenotype-coupled class (`tier1.py`'s header table, §0's hazard-classes row).
+Stated with its actual limits rather than smoothed into an equivalent claim
+to the other four: what the evidence supports is cell PRESENCE affecting
+drift magnitude, not a dose-response on activation level, and the transfer
+from the swept paper's 3D degradable PEG geometry to this scaffold's 2D
+polyacrylamide is unconfirmed — the paper itself complicates a clean version
+of the claim by reporting acellular gels also softened, just apparently
+less. See `tier1.py`'s `STIFFNESS_DRIFT.hazard` and
+`refute/assays/findings/stiffness_drift.py` for the full reasoning.
 
 So the calibration run *is* a result about the literature, and the interesting
 part is not that the asymmetry held — it mostly did — but the three specific,
 checkable places it did not.
+
+**Follow-on, 2026-08-16.** `bleomycin_lung`'s recovered constants sat unused
+in the registry for the rest of that day — `require_runnable()` doesn't
+imply anything can actually score a design, only that the requirement-
+resolution seam reports the protocol as filled. It was promoted to
+LITERATURE tier (`assays/bleomycin_lung.py`, §0) and, separately and later
+the same day, given its own working simulator (§9.3's reversal). The other
+five scaffolds' recovered evidence is still sitting unpromoted in
+`findings/` — promoting the registry entry is a small, precedented step;
+none of the five would be scoreable without its own twin regardless.
 
 ### 6.6 How this scales — tier cases by defect, not by domain
 
@@ -920,6 +954,41 @@ mechanism and is where volume comes from; tier 1 needs somebody's unpublished
 plate; tier 2 is honestly empty. The objection is conceded rather than argued —
 a second mechanistic twin is not cheaper, most of a useful benchmark just does
 not need one.
+
+> **Reversed, 2026-08-16.** A second mechanistic twin *was* built —
+> `bleomycin_lung`, mortality + Ashcroft severity, an MSC treatment arm
+> calibrated from a real sweep — and the trigger was a direct question the
+> `fibrin_contracture` twin structurally could not answer: "will MSC therapy
+> work for bleomycin-induced pulmonary fibrosis, and what's the best way to
+> test it." No amount of clever scoring against one apparatus answers a
+> question about a different one. The "not cheaper" argument above was about
+> whether a second twin was worth its *build cost* per marginal question; it
+> did not anticipate the actual failure mode, which was that `optimize`/
+> `baseline` simply had nothing to say about a real, motivated hypothesis
+> the moment it left the fibrin gel.
+>
+> What actually made the second twin cheap enough to build in one session:
+> the SEAM was already right. `assays/base.py`'s `AssayProtocol` was already
+> generic (readout/hazard/constants, not fibrin-specific fields),
+> `resolve.py`/`gate.py`/`requirements.py` already read
+> `protocol.all_constants()` rather than assuming a shape, and
+> `ScopeTerm.__iter__`'s duck-typing precedent meant `twins.py` didn't need
+> a forced shared base class between `DesignScore` and `BleomycinScore` —
+> just a minimal structural surface (`.power`, `.testable_rate`,
+> `.summary()`, `.verdict_sensitive_to_assumption`). The twin itself
+> (`bleomycin_twin.py`, `bleomycin_score.py`) was the actual new work: a
+> shared-latent-variable mortality/severity model that makes the
+> survivorship-bias mechanism this whole project is about a *number a
+> sensitivity sweep produces*, not a warning asserted in prose again.
+>
+> Revised position: a third mechanistic twin (candidate raised 2026-08-16:
+> apoptosis/necrosis resistance in activated vs quiescent fibroblasts — no
+> registry protocol exists for it yet, not even a scaffold) is cheap
+> *conditional on the seam staying generic* — which is now a real invariant
+> to protect, not an assumption. The moment a new twin needs
+> `DesignSpec`/`score.py` themselves to grow fibrin-specific special cases
+> to accommodate it, that invariant has broken and the next twin stops
+> being cheap.
 
 ### 9.4 The interface question — agent, API, or both
 

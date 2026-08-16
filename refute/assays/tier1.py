@@ -326,6 +326,18 @@ FIBROSIS_ON_CHIP = AssayProtocol(
         ),
     ),
     hazard=HazardSpec(
+        # Corrected 2026-08-16 - was True, which contradicted this
+        # protocol's own why_it_matters ("dose and hazard cannot be
+        # separated by design") and every doc/test describing it as the
+        # independent-hazard example alongside fibrosis_on_chip's former
+        # NOT-coupled partner, stiffness_drift. The hazard here is driven
+        # by the APPLIED strain amplitude, an input the experimenter sets -
+        # not by fibrotic_marker_or_barrier, the readout itself - which is
+        # exactly what driver_is_the_measured_phenotype is supposed to
+        # distinguish. Found via test_tier1_selection_criterion_holds after
+        # stiffness_drift's own hazard was recoupled the same day; the old
+        # test only ever asserted the exempt list's SIZE stayed at one
+        # member, never that this specific protocol belonged in it.
         mechanism="Membrane rupture, bubble ingress, or channel occlusion",
         driver="applied cyclic strain amplitude and cycle count",
         driver_is_the_measured_phenotype=False,
@@ -405,7 +417,25 @@ STIFFNESS_DRIFT = AssayProtocol(
         ),
     ),
     hazard=HazardSpec(
-        mechanism="Substrate modulus drifts from its nominal value (swelling/degradation)",
+        # RESOLVED 2026-08-16, owner call: the drift depends on cells, not
+        # only on time/medium as this HazardSpec previously declared. Scott
+        # 2020 (10.1002/adhm.201901593, swept for modulus_drift_pct_per_day
+        # and drift_depends_on_nominal below) reports drift magnitude
+        # differing between cell-encapsulated and acellular gels in its own
+        # 3D degradable PEG system. What the evidence supports precisely is
+        # CELL PRESENCE affecting drift, not a dose-response on activation
+        # level (asma_positive_fraction itself) - stated here rather than
+        # overclaimed, and it also has not been confirmed to transfer from
+        # that paper's 3D PEG geometry to this scaffold's 2D polyacrylamide.
+        # Owner's call is to treat that as close enough to couple the
+        # hazard: a design that seeds more or fewer activated cells changes
+        # its own modulus-drift risk, which is the survivorship-relevant
+        # property regardless of the exact mechanism.
+        mechanism=(
+            "Substrate modulus drifts from its nominal value (swelling/"
+            "degradation), and the drift rate itself depends on the "
+            "presence of encapsulated cells"
+        ),
         driver="time in culture, medium composition, and encapsulated cells",
         driver_is_the_measured_phenotype=True,
         mitigation="re-measure modulus at endpoint rather than trusting the nominal value",
