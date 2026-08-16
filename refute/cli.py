@@ -139,29 +139,25 @@ def cmd_chat(args: argparse.Namespace) -> int:
     if not args.no_model:
         from .agent import extract_design
         from .providers import DEFAULT_EXTRACTOR, spec_from_string
+        from .agent import extract_design as default_extract
 
-        spec = (
-            spec_from_string(args.extractor, "low")
-            if args.extractor
-            else DEFAULT_EXTRACTOR
-        )
-        extractor = lambda text: extract_design(text, extractor=spec)  # noqa: E731
+        extractor = default_extract
 
-    session = Session(extractor=extractor, n_sims=args.sims)
+    session = Session(extractor=extractor, n_sims=args.sims, assay=assay)
 
     print("=" * 68)
-    print("refute chat — describe your experiment; every answer is simulated")
+    print(f"refute chat ({twin.name}) — describe your experiment; every answer is simulated")
     print("=" * 68)
     print(
         "\nDescribe the arms, replicates, when you treat, when you measure and\n"
         "the endpoint. Then ask: what should I change · what if I add aprotinin ·\n"
-        "why · how many wells do I need.   Ctrl-D to leave.\n"
+        "why · how many units do I need.   Ctrl-D to leave.\n"
     )
 
     if args.design:
-        session.design = DesignSpec.model_validate(json.loads(open(args.design).read()))
+        session.design = twin.design_spec_type.model_validate(json.loads(open(args.design).read()))
         try:
-            session.score = score_design(session.design, n_sims=args.sims)
+            session.score = twin.score_fn(session.design, n_sims=args.sims)
         except OutOfTwinScopeError as exc:
             _report_out_of_scope(exc)
             return 2
@@ -169,7 +165,7 @@ def cmd_chat(args: argparse.Namespace) -> int:
         print("\n  computed from:")
         from .chat import _cite
 
-        for line in _cite(session.score, args.sims):
+        for line in _cite(session.score, args.sims, capacity=twin.default_capacity):
             print(f"    {line}")
         print()
 
@@ -1177,6 +1173,9 @@ def main(argv: list[str] | None = None) -> int:
         help="talk about a design; every answer is a simulation",
     )
     p_chat.add_argument("--design", help="start from a DesignSpec JSON file")
+    p_chat.add_argument(
+        "--assay", default="fibrin_contracture", help="assay twin key (default: fibrin_contracture)"
+    )
     p_chat.add_argument("--extractor", help="override the extractor model")
     p_chat.add_argument(
         "--no-model",
@@ -1184,6 +1183,7 @@ def main(argv: list[str] | None = None) -> int:
         help="offline: needs --design, follow-ups still work",
     )
     p_chat.set_defaults(func=cmd_chat)
+
 
     p_inf = sub.add_parser(
         "infer",

@@ -38,6 +38,7 @@ from .advise import advise
 from .calibration import DEFAULT_PARAMS, PLATE_WELLS, TwinParams
 from .design import DesignSpec, OutOfTwinScopeError
 from .score import DesignScore, score_design
+from .twins import DEFAULT_ASSAY, get_twin
 
 # Follow-ups are routed on these rather than by a model. Order matters: the
 # first list whose pattern matches wins, so put the specific before the general.
@@ -71,7 +72,7 @@ class Turn:
     intent: str
     answer: str
     evidence: list[str] = field(default_factory=list)
-    score: DesignScore | None = None
+    score: Any | None = None
     called_model: bool = False
 
     def render(self) -> str:
@@ -83,22 +84,28 @@ class Turn:
         return "\n".join(out)
 
 
-def _cite(score: DesignScore, n_sims: int) -> list[str]:
+def _cite(score: Any, n_sims: int, capacity: int = PLATE_WELLS) -> list[str]:
     """The citation. Numbers a reader can check, plus how they were produced."""
+    if hasattr(score, "mean_lysed_fraction"):
+        loss_str = f"{score.mean_lysed_fraction:.0%} of wells lost by the endpoint"
+        unit_str = f"mean usable wells per plate {score.mean_usable_wells:.1f}"
+    else:
+        loss_str = f"mean animals scored {getattr(score, 'mean_animals_scored', 0):.1f}"
+        unit_str = f"mean animals scored {getattr(score, 'mean_animals_scored', 0):.1f}"
+
     lines = [
-        f"{n_sims} simulated plates of the design as extracted",
-        f"power {score.power:.0%} · testable {score.testable_rate:.0%} · "
-        f"{score.mean_lysed_fraction:.0%} of wells lost by the endpoint",
-        f"mean usable wells per plate {score.mean_usable_wells:.1f}",
+        f"{n_sims} simulated runs of the design as extracted",
+        f"power {score.power:.0%} · testable {score.testable_rate:.0%} · {loss_str}",
+        unit_str,
     ]
     if score.replicates_needed > 0:
         lines.append(
-            f"needs ~{score.replicates_needed} wells per arm; the apparatus "
-            f"holds {PLATE_WELLS}"
+            f"needs ~{score.replicates_needed} units per arm; the apparatus "
+            f"holds {capacity}"
         )
     else:
         lines.append(
-            "required replication NOT estimable - too many wells were lost for "
+            "required replication NOT estimable - too many units were lost for "
             "the surviving sample to support an estimate"
         )
     if score.verdict_sensitive_to_assumption:
@@ -107,6 +114,7 @@ def _cite(score: DesignScore, n_sims: int) -> list[str]:
             "constant"
         )
     return lines
+
 
 
 class Session:
@@ -119,15 +127,18 @@ class Session:
 
     def __init__(
         self,
-        extractor: Callable[[str], DesignSpec] | None = None,
-        params: TwinParams = DEFAULT_PARAMS,
+        extractor: Callable[[str], Any] | None = None,
+        params: Any = None,
         n_sims: int = 400,
+        assay: str = DEFAULT_ASSAY,
     ):
+        self.assay = assay
+        self.twin = get_twin(assay)
         self._extract = extractor
         self.params = params
         self.n_sims = n_sims
-        self.design: DesignSpec | None = None
-        self.score: DesignScore | None = None
+        self.design: Any | None = None
+        self.score: Any | None = None
         self.history: list[Turn] = []
 
     # -- routing ---------------------------------------------------------
@@ -173,7 +184,7 @@ class Session:
                 intent="design",
                 answer=(
                     "No extractor is configured, so prose cannot be read into a "
-                    "design. Pass a DesignSpec directly, or configure one."
+                    "design. Pass a design spec directly, or configure one."
                 ),
             )
         try:
@@ -192,7 +203,10 @@ class Session:
             )
 
         try:
-            score = score_design(spec, params=self.params, n_sims=self.n_sims)
+            kwargs: dict[str, Any] = {"n_sims": self.n_sims}
+            if self.params is not None:
+                kwargs["params"] = self.params
+            score = self.twin.score_fn(spec, **kwargs)
         except OutOfTwinScopeError as exc:
             return Turn(
                 intent="design",
@@ -200,9 +214,9 @@ class Session:
                     "I can't score this, and that is a limit of the simulator "
                     "rather than a problem with your design:\n  - "
                     + "\n  - ".join(exc.reasons)
-                    + "\n\nThe twin models an anchored fibrin gel measured by "
-                    "area. For anything else, `refute tier0` still answers the "
-                    "power question from your own effect size and SD."
+                    + f"\n\nThe twin models {self.twin.name}. For anything else, "
+                    "`refute tier0` still answers the power question from your own "
+                    "effect size and SD."
                 ),
                 called_model=True,
             )
@@ -211,7 +225,7 @@ class Session:
         if score.declined:
             answer = (
                 "That declines to run the experiment rather than proposing a "
-                "plate. Nothing was simulated. Whether declining is right here is "
+                "cohort/plate. Nothing was simulated. Whether declining is right here is "
                 "answered by the reference designs - see `refute baselines`."
             )
             return Turn(intent="design", answer=answer, score=score, called_model=True)
@@ -220,12 +234,12 @@ class Session:
         return Turn(
             intent="design",
             answer=answer,
-            evidence=_cite(score, self.n_sims),
+            evidence=_cite(score, self.n_sims, capacity=self.twin.default_capacity),
             score=score,
             called_model=True,
         )
 
-    def _verdict_sentence(self, score: DesignScore) -> str:
+    def _verdict_sentence(self, score: Any) -> str:
         if score.power >= 0.8:
             return "This design can answer its question."
         if score.testable_rate < 0.5:
@@ -242,13 +256,22 @@ class Session:
         return "This design is underpowered for the effect it is looking for."
 
     def _handle_advise(self, _text: str) -> Turn:
-        result = advise(self.design, params=self.params, n_sims=self.n_sims)
+        if self.twin.advise_fn is None:
+            return Turn(
+                intent="advise",
+                answer=f"No advisor registered for assay '{self.assay}'.",
+                evidence=_cite(self.score, self.n_sims, capacity=self.twin.default_capacity),
+            )
+        kwargs: dict[str, Any] = {"n_sims": self.n_sims}
+        if self.params is not None:
+            kwargs["params"] = self.params
+        result = self.twin.advise_fn(self.design, **kwargs)
         helpful = result.helpful
         if not helpful:
             return Turn(
                 intent="advise",
                 answer="No single change to this design improves it.",
-                evidence=_cite(self.score, self.n_sims),
+                evidence=_cite(self.score, self.n_sims, capacity=self.twin.default_capacity),
             )
         lines = [f"{len(helpful)} change(s) help, best first:", ""]
         evidence: list[str] = []
@@ -291,28 +314,42 @@ class Session:
                 ),
             )
 
-        from .advise import _variants
+        if self.twin.key == "bleomycin_lung":
+            from .bleomycin_advise import _variants as bleo_variants
+            variants_fn = bleo_variants
+        else:
+            from .advise import _variants as fibrin_variants
+            variants_fn = fibrin_variants
 
-        for name, change, variant, _caveat in _variants(self.design):
+        for name, change, variant, _caveat in variants_fn(self.design):
             if name != lever:
                 continue
             try:
-                after = score_design(variant, params=self.params, n_sims=self.n_sims)
+                kwargs: dict[str, Any] = {"n_sims": self.n_sims}
+                if self.params is not None:
+                    kwargs["params"] = self.params
+                after = self.twin.score_fn(variant, **kwargs)
             except OutOfTwinScopeError:
                 continue
             direction = "better" if after.power > self.score.power else (
                 "no better" if after.power <= self.score.power else "worse"
             )
+            ev = [
+                f"power {self.score.power:.0%} -> {after.power:.0%}",
+                f"testable {self.score.testable_rate:.0%} -> {after.testable_rate:.0%}",
+            ]
+            if hasattr(self.score, "mean_lysed_fraction") and hasattr(after, "mean_lysed_fraction"):
+                ev.append(
+                    f"wells lost {self.score.mean_lysed_fraction:.0%} -> {after.mean_lysed_fraction:.0%}"
+                )
+            elif hasattr(self.score, "mean_animals_scored") and hasattr(after, "mean_animals_scored"):
+                ev.append(
+                    f"animals scored {self.score.mean_animals_scored:.1f} -> {after.mean_animals_scored:.1f}"
+                )
             return Turn(
                 intent="whatif",
                 answer=f"{change} — {direction}.",
-                evidence=[
-                    f"power {self.score.power:.0%} -> {after.power:.0%}",
-                    f"testable {self.score.testable_rate:.0%} -> "
-                    f"{after.testable_rate:.0%}",
-                    f"wells lost {self.score.mean_lysed_fraction:.0%} -> "
-                    f"{after.mean_lysed_fraction:.0%}",
-                ],
+                evidence=ev,
                 score=after,
             )
         return Turn(
@@ -328,12 +365,12 @@ class Session:
             return Turn(
                 intent="why",
                 answer="No structural failure modes were detected.",
-                evidence=_cite(self.score, self.n_sims),
+                evidence=_cite(self.score, self.n_sims, capacity=self.twin.default_capacity),
             )
         return Turn(
             intent="why",
             answer="\n".join(f"  - {d}" for d in self.score.diagnoses),
-            evidence=_cite(self.score, self.n_sims),
+            evidence=_cite(self.score, self.n_sims, capacity=self.twin.default_capacity),
         )
 
     def _handle_scale(self, _text: str) -> Turn:
@@ -348,18 +385,20 @@ class Session:
                     "largest effect. Fix the loss first; the number is only "
                     "answerable once units survive."
                 ),
-                evidence=_cite(s, self.n_sims),
+                evidence=_cite(s, self.n_sims, capacity=self.twin.default_capacity),
             )
-        arms = max(s.n_conditions, 1)
+        n_conds = getattr(s, "n_conditions", len(getattr(s, "conditions", [])))
+        arms = max(n_conds, 1)
         total = s.replicates_needed * arms
         answer = (
             f"About {s.replicates_needed} per arm — {total} in total across "
             f"{arms} arms."
         )
-        if total > PLATE_WELLS:
+        if total > self.twin.default_capacity:
             answer += (
-                f" The apparatus holds {PLATE_WELLS}, so this is not reachable "
+                f" The apparatus holds {self.twin.default_capacity}, so this is not reachable "
                 "at this scale. Narrowing to fewer arms is the only move that "
                 "buys replication without more capacity."
             )
-        return Turn(intent="scale", answer=answer, evidence=_cite(s, self.n_sims))
+        return Turn(intent="scale", answer=answer, evidence=_cite(s, self.n_sims, capacity=self.twin.default_capacity))
+

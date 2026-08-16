@@ -33,8 +33,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from .bleomycin_design import BleomycinDesignSpec
 from .design import DesignSpec, OutOfTwinScopeError
 from .score import DesignScore, score_design
+from .twins import get_twin
 
 # A request may not ask for unbounded simulation. 400 plates is the CLI default
 # and is enough for a stable power estimate; the ceiling exists so one caller
@@ -122,19 +124,25 @@ class ScoreResponse(BaseModel):
     summary: str = Field(description="The CLI's human-readable rendering.")
 
     @classmethod
-    def of(cls, score: DesignScore) -> "ScoreResponse":
+    def of(cls, score: Any) -> "ScoreResponse":
+        mean_wells = getattr(score, "mean_usable_wells", getattr(score, "mean_animals_scored", 0.0))
+        mean_lysed = getattr(score, "mean_lysed_fraction", 0.0)
+        over_cap = getattr(score, "over_plate_capacity", getattr(score, "over_cohort_capacity", False))
+        kinetics = getattr(score, "identifies_contraction_kinetics", False)
+        min_diff = _finite_or_none(getattr(score, "min_detectable_ratio_diff", getattr(score, "min_detectable_effect_size", float("nan"))))
+
         return cls(
             power=score.power,
             testable_rate=score.testable_rate,
-            mean_usable_wells=score.mean_usable_wells,
-            mean_lysed_fraction=score.mean_lysed_fraction,
-            over_plate_capacity=score.over_plate_capacity,
-            identifies_contraction_kinetics=score.identifies_contraction_kinetics,
-            min_detectable_ratio_diff=_finite_or_none(score.min_detectable_ratio_diff),
+            mean_usable_wells=mean_wells,
+            mean_lysed_fraction=mean_lysed,
+            over_plate_capacity=over_cap,
+            identifies_contraction_kinetics=kinetics,
+            min_detectable_ratio_diff=min_diff,
             replicates_needed=(
                 score.replicates_needed if score.replicates_needed > 0 else None
             ),
-            n_conditions=score.n_conditions,
+            n_conditions=getattr(score, "n_conditions", len(getattr(score, "conditions", []))),
             failed=score.failed,
             infeasible_as_scoped=score.infeasible_as_scoped,
             feasibility=score.feasibility,
@@ -148,7 +156,8 @@ class ScoreResponse(BaseModel):
 
 
 class ScoreRequest(BaseModel):
-    design: DesignSpec
+    assay: str = Field(default="fibrin_contracture", description="Assay key from TWINS registry.")
+    design: dict[str, Any] | DesignSpec | BleomycinDesignSpec
     n_sims: int = Field(default=DEFAULT_N_SIMS, ge=1, le=MAX_N_SIMS)
     seed: int | None = Field(
         default=0, description="Fixed by default, so a score is reproducible."
@@ -156,6 +165,7 @@ class ScoreRequest(BaseModel):
 
 
 class TextScoreRequest(BaseModel):
+    assay: str = Field(default="fibrin_contracture", description="Assay key from TWINS registry.")
     design_text: str = Field(min_length=1, description="A design, as prose.")
     n_sims: int = Field(default=DEFAULT_N_SIMS, ge=1, le=MAX_N_SIMS)
     seed: int | None = 0
@@ -168,7 +178,7 @@ class TextScoreRequest(BaseModel):
 
 
 class TextScoreResponse(BaseModel):
-    extracted: DesignSpec = Field(
+    extracted: Any = Field(
         description="What the extractor read. Check this before trusting the score."
     )
     score: ScoreResponse
@@ -237,11 +247,16 @@ def healthz() -> dict[str, Any]:
     return {"ok": True, "run_enabled": _run_enabled()}
 
 
-@app.post("/score", response_model=ScoreResponse, summary="Score a DesignSpec")
+@app.post("/score", response_model=ScoreResponse, summary="Score a design")
 def post_score(req: ScoreRequest) -> ScoreResponse:
     """Simulate a design. No model is called and no credential is required."""
+    twin = get_twin(req.assay)
+    if isinstance(req.design, dict):
+        design = twin.design_spec_type.model_validate(req.design)
+    else:
+        design = req.design
     return ScoreResponse.of(
-        score_design(req.design, n_sims=req.n_sims, seed=req.seed)
+        twin.score_fn(design, n_sims=req.n_sims, seed=req.seed)
     )
 
 
@@ -256,8 +271,9 @@ def post_score_text(req: TextScoreRequest) -> TextScoreResponse:
     misread design is a parsing failure, and must be distinguishable from a
     design that genuinely does not work.
     """
-    spec = _extract(req.design_text, req.extractor)
-    score = score_design(spec, n_sims=req.n_sims, seed=req.seed)
+    twin = get_twin(req.assay)
+    spec = _extract(req.design_text, req.extractor, spec_type=twin.design_spec_type)
+    score = twin.score_fn(spec, n_sims=req.n_sims, seed=req.seed)
     return TextScoreResponse(extracted=spec, score=ScoreResponse.of(score))
 
 
@@ -362,19 +378,29 @@ def _model_spec(text: str, default_effort: str) -> Any:
         raise HTTPException(status_code=400, detail=f"bad model spec: {exc}") from exc
 
 
-def _extract(design_text: str, extractor: str | None) -> DesignSpec:
-    """Prose -> DesignSpec, translating provider failures into HTTP errors."""
+def _extract(design_text: str, extractor: str | None, spec_type: type = DesignSpec) -> Any:
+    """Prose -> spec_type, translating provider failures into HTTP errors."""
     if not design_text.strip():
         raise HTTPException(status_code=422, detail="design_text is empty")
 
-    from .agent import extract_design
-    from .providers import DEFAULT_EXTRACTOR
+    from .intake import extract_design as intake_extract_design
+    from .providers import DEFAULT_EXTRACTOR, get_provider
 
     spec = _model_spec(extractor, "low") if extractor else DEFAULT_EXTRACTOR
+
+    def model_extractor(text: str) -> Any:
+        return get_provider(spec.provider).parse(
+            [{"role": "user", "content": text}],
+            spec,
+            32000,
+            spec_type,
+        )
+
     try:
-        return extract_design(design_text, extractor=spec)
+        return intake_extract_design(design_text, extractor=model_extractor, design_spec_type=spec_type)
     except Exception as exc:
         raise _provider_error(exc) from exc
+
 
 
 def _provider_error(exc: Exception) -> HTTPException:
