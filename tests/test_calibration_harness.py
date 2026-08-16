@@ -129,10 +129,11 @@ def test_the_asymmetry_holds_in_the_current_record():
       - `modulus_drift_pct_per_day` and `drift_depends_on_nominal`
         (stiffness_drift) - a 42-day rheology time course (Scott 2020,
         10.1002/adhm.201901593) that also complicates the registry's own
-        hazard declaration for that scaffold; see
-        `findings/stiffness_drift.py`.
+      - `p_death_quiescent` and `p_death_activated` (apoptosis_resistance) -
+        apoptotic death fractions measured under standard challenge (Bühling
+        2005, 10.1186/1465-9921-6-37).
 
-    This list is pinned by name, not by count, so a fifth recovery fails
+    This list is pinned by name, not by count, so an unlisted recovery fails
     loudly with a name to go add rather than a number to bump."""
     readout_hits = 0
     failure_names: set[str] = set()
@@ -141,6 +142,8 @@ def test_the_asymmetry_holds_in_the_current_record():
         "p_seeding_failure",
         "modulus_drift_pct_per_day",
         "drift_depends_on_nominal",
+        "p_death_quiescent",
+        "p_death_activated",
     }
     for key, report in REPORTS.items():
         readout_names = {c.name for c in REGISTRY[key].readout.constants}

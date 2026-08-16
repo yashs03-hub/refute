@@ -60,12 +60,15 @@ def test_every_protocol_names_its_failure_mechanism_and_driver(protocol):
 def test_tier1_selection_criterion_holds():
     """Tier 1 exists because the measured phenotype drives the failure.
 
-    Exactly one member is exempt: stiffness_drift, which is a different defect
-    class - the independent variable drifts rather than the assay failing. If
-    another exemption appears, the tier has lost its selection criterion.
+    Exactly one member is exempt: fibrosis_on_chip, driven by an applied
+    strain you set, not by the phenotype being measured. `stiffness_drift`
+    moved OUT of the exempt set 2026-08-16 - owner call that its drift
+    depends on encapsulated cells (see tier1.py's STIFFNESS_DRIFT.hazard for
+    the evidence and its stated limits). If another exemption appears
+    besides fibrosis_on_chip, the tier has lost its selection criterion.
     """
     exempt = [p.key for p in TIER1 if not p.hazard.driver_is_the_measured_phenotype]
-    assert exempt == ["stiffness_drift"], (
+    assert exempt == ["fibrosis_on_chip"], (
         f"unexpected tier-1 members whose failure is not phenotype-driven: {exempt}"
     )
 
