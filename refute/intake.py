@@ -77,6 +77,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 from .assays import REGISTRY
 from .assays.base import AssayProtocol, CalibrationStatus
 from .design import DesignSpec
+from .twins import TWINS
 
 # ---------------------------------------------------------------------------
 # Tuning constants. Every number a selection depends on lives here, in one
@@ -672,11 +673,12 @@ def _failure_message(exc: BaseException) -> str:
 
 def extract_design(
     text: str,
-    extractor: Callable[[str], DesignSpec] | None = None,
+    extractor: Callable[[str], Any] | None = None,
     *,
     unmodelled: Iterable[str] = (),
-) -> DesignSpec:
-    """Prose to `DesignSpec`. The model extracts; nothing here judges.
+    design_spec_type: type = DesignSpec,
+) -> Any:
+    """Prose to design spec. The model extracts; nothing here judges.
 
     `extractor` is injected rather than defaulted to a provider. A default would
     make the honest path - "no extractor is configured" - the path nobody
@@ -685,7 +687,7 @@ def extract_design(
     guess a design, because a guessed design scored by the twin is a confident
     number about a plate nobody proposed.
 
-    `unmodelled` is merged into `DesignSpec.out_of_twin_scope`. It exists for the
+    `unmodelled` is merged into `out_of_twin_scope`. It exists for the
     one thing the extractor cannot know: that the *registry* has no protocol for
     this residual at all. `intake` passes the none-of-these reason through here
     so the gate can route OUT_OF_SCOPE honestly rather than being handed a
@@ -701,12 +703,12 @@ def extract_design(
     except Exception as exc:
         raise ExtractionFailure(_failure_message(exc)) from exc
 
-    if not isinstance(spec, DesignSpec):
+    if not isinstance(spec, design_spec_type):
         # An extractor returning the wrong type is a parsing failure like any
         # other. Letting it through would put a duck-typed object in front of
         # the simulator, which is a worse error one step later.
         raise ExtractionFailure(
-            f"The extractor returned {type(spec).__name__}, not a DesignSpec. "
+            f"The extractor returned {type(spec).__name__}, not a {design_spec_type.__name__}. "
             f"That is a parsing failure on our side, not a judgement about your "
             f"experiment."
         )
@@ -714,7 +716,7 @@ def extract_design(
     extra = [r.strip() for r in unmodelled if r and r.strip()]
     if not extra:
         return spec
-    merged = list(spec.out_of_twin_scope)
+    merged = list(getattr(spec, "out_of_twin_scope", []))
     for reason in extra:
         if reason not in merged:
             merged.append(reason)
@@ -825,7 +827,7 @@ class Intake:
     residual: str
     hypothesis: str
     selection: AssaySelection
-    design: DesignSpec | None
+    design: Any | None
     extraction: Extraction
     note: str
     narrative: tuple[str, ...]
@@ -857,7 +859,7 @@ class Intake:
 
 def intake(
     handoff_or_text: Any,
-    extractor: Callable[[str], DesignSpec] | None = None,
+    extractor: Callable[[str], Any] | None = None,
     *,
     registry: Mapping[str, AssayProtocol] | None = None,
 ) -> Intake:
@@ -873,7 +875,7 @@ def intake(
     experiment could not be parsed will eventually report that as a bad design.
 
     When no assay fits, the reason is written into
-    `DesignSpec.out_of_twin_scope`. That is the whole join: a residual the
+    `out_of_twin_scope`. That is the whole join: a residual the
     registry cannot model arrives at the gate as OUT_OF_SCOPE rather than as a
     design that looks fine and is quietly about the wrong apparatus.
     """
@@ -913,11 +915,16 @@ def intake(
             "does not fit."
         )
 
+    spec_type = DesignSpec
+    if selection.best and selection.best.key in TWINS:
+        spec_type = TWINS[selection.best.key].design_spec_type
+
     try:
         design = extract_design(
             brief_for_extractor(residual, hypothesis),
             extractor,
             unmodelled=unmodelled,
+            design_spec_type=spec_type,
         )
     except NoExtractorConfigured as exc:
         narrative.append(
@@ -955,16 +962,20 @@ def intake(
             f"The design declares {len(declared)} thing(s) outside what the twin "
             f"models: {'; '.join(declared)}."
         )
-    if design.assigns_wells:
+    assigns = getattr(design, "assigns_wells", getattr(design, "assigns_animals", False))
+    if assigns:
+        if hasattr(design, "endpoint_time_h"):
+            ep_str = f"endpoint {design.endpoint_time_h:g} h."
+        else:
+            ep_str = f"endpoint day {design.endpoint_day:g}."
         narrative.append(
             f"Extracted a design: {len(design.conditions)} arm(s), "
-            f"{design.replicates_per_condition} per arm, endpoint "
-            f"{design.endpoint_time_h:g} h."
+            f"{design.replicates_per_condition} per arm, {ep_str}"
         )
     else:
         narrative.append(
-            "Extracted a design that assigns no wells - it declines to run the "
-            "experiment rather than proposing a plate, which is a position and "
+            "Extracted a design that assigns no wells/animals - it declines to run the "
+            "experiment rather than proposing a cohort, which is a position and "
             "not a malformed spec."
         )
     return Intake(
@@ -976,6 +987,7 @@ def intake(
         note="",
         narrative=tuple(narrative),
     )
+
 
 
 __all__ = [
