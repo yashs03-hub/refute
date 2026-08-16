@@ -5,18 +5,26 @@ destroys the assay.** That coupling is what a power calculation cannot model
 and what makes a twin worth building. An assay whose failure is merely a
 function of elapsed time is real but ordinary.
 
-**Two of the six do not meet that criterion, and saying so is cheaper than
-being caught by it.** Checked 2026-08-15 against each protocol's own `driver`:
+**One of the six does not meet that criterion, and saying so is cheaper than
+being caught by it.** Checked 2026-08-15 against each protocol's own `driver`,
+**revised 2026-08-16** once `stiffness_drift`'s hazard was recoupled (owner
+call, see that protocol's `HazardSpec` for the reasoning and its limits):
 
     coupled to the phenotype        traction_force, scar_in_a_jar,
-                                    cell_derived_matrix, bleomycin_lung*
+                                    cell_derived_matrix, bleomycin_lung*,
+                                    stiffness_drift**
     NOT coupled                     fibrosis_on_chip  (applied cyclic strain -
                                                        a parameter you set)
-                                    stiffness_drift   (time in culture)
 
     * bleomycin_lung moved to its own module (`bleomycin_lung.py`) 2026-08-16
       once calibrated - it is no longer defined in this file, but the
-      four-way split above still holds and is kept here for the count.
+      five-way split above still holds and is kept here for the count.
+    ** stiffness_drift was NOT coupled until 2026-08-16. The literature
+      finding is CELL PRESENCE affecting drift magnitude, not a dose-response
+      on activation level, and it has not been confirmed to transfer from the
+      swept paper's 3D geometry to this scaffold's 2D one - a narrower claim
+      than the other four, stated as such in the HazardSpec, not smoothed
+      into an equivalent one here.
 
 That matters because the coupled ones carry the property this project is
 actually about: the units that fail are the ones carrying the largest effect, so
@@ -26,8 +34,10 @@ easier - no survivorship bias, no coupling constant, and plausibly recoverable
 from published methods, since a rupture rate per cycle is the kind of thing a
 device paper reports.
 
-So they are kept, but not claimed as instances of the coupled class. If the
-generalisation is ever stated as "one mechanism, six instances", it is four.
+So `fibrosis_on_chip` is kept, but not claimed as an instance of the coupled
+class. If the generalisation is ever stated as "one mechanism, six
+instances", it is five, not four - the count changed once, and the reason it
+changed is worth reading, not just the new number.
 
 Every protocol still in this file is a SCAFFOLD. The structure is declared;
 the numbers are absent and will raise `UncalibratedAssayError` if anything
@@ -316,9 +326,21 @@ FIBROSIS_ON_CHIP = AssayProtocol(
         ),
     ),
     hazard=HazardSpec(
+        # Corrected 2026-08-16 - was True, which contradicted this
+        # protocol's own why_it_matters ("dose and hazard cannot be
+        # separated by design") and every doc/test describing it as the
+        # independent-hazard example alongside fibrosis_on_chip's former
+        # NOT-coupled partner, stiffness_drift. The hazard here is driven
+        # by the APPLIED strain amplitude, an input the experimenter sets -
+        # not by fibrotic_marker_or_barrier, the readout itself - which is
+        # exactly what driver_is_the_measured_phenotype is supposed to
+        # distinguish. Found via test_tier1_selection_criterion_holds after
+        # stiffness_drift's own hazard was recoupled the same day; the old
+        # test only ever asserted the exempt list's SIZE stayed at one
+        # member, never that this specific protocol belonged in it.
         mechanism="Membrane rupture, bubble ingress, or channel occlusion",
         driver="applied cyclic strain amplitude and cycle count",
-        driver_is_the_measured_phenotype=True,
+        driver_is_the_measured_phenotype=False,
         mitigation="lower strain amplitude (reduces the stimulus), degassing",
         constants=(
             _missing("p_rupture_per_1e5_cycles", "probability", "by strain amplitude"),
@@ -395,9 +417,27 @@ STIFFNESS_DRIFT = AssayProtocol(
         ),
     ),
     hazard=HazardSpec(
-        mechanism="Substrate modulus drifts from its nominal value (swelling/degradation)",
-        driver="time in culture, medium composition",
-        driver_is_the_measured_phenotype=False,
+        # RESOLVED 2026-08-16, owner call: the drift depends on cells, not
+        # only on time/medium as this HazardSpec previously declared. Scott
+        # 2020 (10.1002/adhm.201901593, swept for modulus_drift_pct_per_day
+        # and drift_depends_on_nominal below) reports drift magnitude
+        # differing between cell-encapsulated and acellular gels in its own
+        # 3D degradable PEG system. What the evidence supports precisely is
+        # CELL PRESENCE affecting drift, not a dose-response on activation
+        # level (asma_positive_fraction itself) - stated here rather than
+        # overclaimed, and it also has not been confirmed to transfer from
+        # that paper's 3D PEG geometry to this scaffold's 2D polyacrylamide.
+        # Owner's call is to treat that as close enough to couple the
+        # hazard: a design that seeds more or fewer activated cells changes
+        # its own modulus-drift risk, which is the survivorship-relevant
+        # property regardless of the exact mechanism.
+        mechanism=(
+            "Substrate modulus drifts from its nominal value (swelling/"
+            "degradation), and the drift rate itself depends on the "
+            "presence of encapsulated cells"
+        ),
+        driver="time in culture, medium composition, and encapsulated cells",
+        driver_is_the_measured_phenotype=True,
         mitigation="re-measure modulus at endpoint rather than trusting the nominal value",
         constants=(
             _missing("modulus_drift_pct_per_day", "% per day", "swelling/degradation rate"),
@@ -422,10 +462,95 @@ STIFFNESS_DRIFT = AssayProtocol(
 )
 
 
+# ---------------------------------------------------------------------------
+# 7. Apoptosis/necrosis resistance - added 2026-08-16 as a candidate third
+# mechanistic twin. Tests whether the activated (fibrotic) phenotype resists
+# an apoptotic/necrotic challenge better than the quiescent one - a
+# well-established finding in fibrosis biology (myofibroblast apoptosis
+# resistance is the textbook reason fibrosis becomes progressive: normal
+# wound healing resolves via myofibroblast apoptosis, and fibrotic disease is
+# partly a failure of that clearance), but general knowledge is not a
+# calibration - this scaffold needs its own literature sweep for real
+# quoted numbers before any twin gets built on it.
+# ---------------------------------------------------------------------------
+
+APOPTOSIS_RESISTANCE = AssayProtocol(
+    key="apoptosis_resistance",
+    name="Apoptotic/necrotic challenge, activated vs quiescent fibroblasts",
+    unit="well",
+    status=CalibrationStatus.SCAFFOLD,
+    summary=(
+        "Fibroblasts activated by TGF-b1 (or a comparable profibrotic stimulus) "
+        "and quiescent controls are exposed to a defined apoptotic (staurosporine, "
+        "serum withdrawal, FasL) or necrotic (H2O2, mechanical injury) challenge. "
+        "Readout is the surviving fraction at a fixed timepoint following the challenge, by "
+        "Annexin V/PI or an equivalent viability stain."
+    ),
+    species=ScopeTerm.unspecified(
+        "no specific protocol has been selected yet - this is a candidate "
+        "scaffold, not a chosen published assay."
+    ),
+    tissue=ScopeTerm.unspecified("depends on which published protocol is used."),
+    cell_type=ScopeTerm.unspecified(
+        "generic 'fibroblasts' until a specific published protocol is selected."
+    ),
+    why_it_matters=(
+        "The resistance itself is what the calibration sweeps this session found "
+        "genuinely well-evidenced in the literature - unlike tocilizumab, "
+        "bevacizumab and verteporfin, which came back thin or contradictory. But "
+        "the twin's actual mechanism is self-selecting in an interesting way: a "
+        "readout defined as 'the surviving fraction' means a resistant cell is "
+        "definitionally more likely to still be there to count, and a "
+        "non-resistant one has already dropped out - survivorship bias built "
+        "into the readout's own definition, not just a risk of it, which no "
+        "other scaffold in this registry has quite this shape."
+    ),
+    readout=ReadoutSpec(
+        name="challenge_survival_fraction",
+        units="fraction of cells",
+        direction="increases",
+        destructive=True,
+        constants=(
+            _missing("baseline_survival_fraction", "fraction", "quiescent arm, after the challenge"),
+            _missing("resistance_effect_size", "fraction", "activated vs quiescent survival gap"),
+            _missing("measurement_cv", "fraction", "replicate CV"),
+        ),
+    ),
+    hazard=HazardSpec(
+        mechanism="Cells are cleared by the apoptotic/necrotic challenge before scoring",
+        driver="activation state (the same TGF-b1 stimulation driving the measured "
+               "resistance phenotype)",
+        driver_is_the_measured_phenotype=True,
+        mitigation="none published yet - calibration_needs below",
+        constants=(
+            _missing("p_death_quiescent", "probability", "quiescent arm, challenge dose"),
+            _missing("p_death_activated", "probability", "activated arm, same dose"),
+        ),
+    ),
+    calibration_needs=(
+        "A specific published protocol: challenge agent, dose, timepoint, readout method",
+        "Quantified survival/apoptotic fraction, activated vs quiescent, same study",
+        "Whether the effect is dose-dependent on TGF-b1 dose or activation duration",
+        "Replicate CV of the survival readout (sets the precision floor)",
+    ),
+    paperclip_query=(
+        "myofibroblast apoptosis resistance fibroblast activation TGF-beta "
+        "staurosporine FasL survival fraction fibrosis"
+    ),
+    notes=(
+        "Candidate scaffold only - no literature sweep run yet, no numbers, "
+        "SCAFFOLD status throughout. See PLAN.md §3 item 9 for the build order "
+        "this is queued in: sweep first, then calibration/design/twin/score "
+        "modules mirroring bleomycin_lung's, only once real numbers exist."
+    ),
+)
+
+
 TIER1 = (
     TRACTION_FORCE,
     SCAR_IN_A_JAR,
     CELL_DERIVED_MATRIX,
     FIBROSIS_ON_CHIP,
     STIFFNESS_DRIFT,
+    APOPTOSIS_RESISTANCE,
 )

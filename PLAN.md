@@ -351,11 +351,11 @@ working artefact that motivates it and gives the dataset a use.
      `bleomycin_lung`'s were (§0) — small, precedented, done once already.
      None becomes scoreable without its own twin (§9.3) regardless of
      promotion.
-   - `stiffness_drift`'s hazard-coupling question (§6.5) — flagged twice,
-     resolved neither time. A human call: does the drift depend on
-     encapsulated cells the way the swept paper's geometry showed, which
-     would mean `HazardSpec.driver_is_the_measured_phenotype=False` is
-     wrong for this scaffold.
+   - ✅ `stiffness_drift`'s hazard-coupling question (§6.5) — **resolved
+     2026-08-16, owner call.** `driver_is_the_measured_phenotype` flipped to
+     `True`; the tier-1 phenotype-coupled count is five now, not four
+     (`tier1.py`'s header, `tests/test_hazard_classes.py`,
+     `tests/test_assays.py::test_tier1_selection_criterion_holds`).
    - A third mechanistic twin, candidate raised same day: apoptosis/necrosis
      resistance in activated vs quiescent fibroblasts. No registry protocol
      exists yet, not even a scaffold — needs one, plus a real literature
@@ -554,14 +554,19 @@ fraction), and `modulus_drift_pct_per_day` plus `drift_depends_on_nominal`
 10.1002/adhm.201901593). `tests/test_calibration_harness.py::
 test_the_asymmetry_holds_in_the_current_record` pins the four by name.
 
-The `stiffness_drift` result carries a second finding: the paper that supplied
+The `stiffness_drift` result carried a second finding: the paper that supplied
 the drift rate also states the drift depends on the presence of encapsulated
-cells, which — if it transfers from that paper's 3D degradable PEG geometry to
-this scaffold's 2D polyacrylamide — would mean `stiffness_drift`'s hazard is
-coupled to the measured phenotype rather than driven only by time and medium
-composition as `HazardSpec` currently declares. Not acted on; flagged in
-`refute/assays/findings/stiffness_drift.py` for a human call, because it
-crosses material and geometry and should not be absorbed silently.
+cells. **Resolved 2026-08-16, owner call:** `stiffness_drift`'s `HazardSpec`
+now declares `driver_is_the_measured_phenotype=True`, moving it into the
+phenotype-coupled class (`tier1.py`'s header table, §0's hazard-classes row).
+Stated with its actual limits rather than smoothed into an equivalent claim
+to the other four: what the evidence supports is cell PRESENCE affecting
+drift magnitude, not a dose-response on activation level, and the transfer
+from the swept paper's 3D degradable PEG geometry to this scaffold's 2D
+polyacrylamide is unconfirmed — the paper itself complicates a clean version
+of the claim by reporting acellular gels also softened, just apparently
+less. See `tier1.py`'s `STIFFNESS_DRIFT.hazard` and
+`refute/assays/findings/stiffness_drift.py` for the full reasoning.
 
 So the calibration run *is* a result about the literature, and the interesting
 part is not that the asymmetry held — it mostly did — but the three specific,

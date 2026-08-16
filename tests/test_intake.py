@@ -220,7 +220,7 @@ def test_a_close_field_does_not_report_itself_decisive():
 
 
 def test_the_selection_says_when_a_candidate_cannot_be_scored():
-    """Six of seven protocols are scaffolds. Selecting one is fine; implying it
+    """Six of eight protocols are scaffolds. Selecting one is fine; implying it
     would produce a number is not."""
     best = select_assay(COLLAGEN_RESIDUAL).best
     assert best.key == "scar_in_a_jar"
