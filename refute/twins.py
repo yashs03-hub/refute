@@ -23,22 +23,29 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from .advise import advise
+from .bleomycin_advise import advise_bleomycin_design
 from .bleomycin_calibration import DEFAULT_COHORT_CAPACITY
-from .bleomycin_design import BleomycinDesignSpec
+from .bleomycin_design import DEFAULT_BLEOMYCIN_DESIGN, BleomycinDesignSpec
+from .bleomycin_optimize import optimize_bleomycin_design
 from .bleomycin_score import score_bleomycin_design
 from .calibration import PLATE_WELLS
-from .design import DesignSpec
+from .design import EXPERIMENT_4_AS_RUN, DesignSpec
+from .optimize import optimize_design
 from .score import score_design
 
 
 @dataclass(frozen=True)
 class AssayTwin:
-    """One assay's design type, scorer, and default capacity."""
+    """One assay's design type, scorer, default capacity, default design, optimizer, and advisor."""
 
     key: str
     design_spec_type: type
     score_fn: Callable[..., Any]
     default_capacity: int
+    default_design: Any = None
+    optimize_fn: Callable[..., Any] | None = None
+    advise_fn: Callable[..., Any] | None = None
 
 
 TWINS: dict[str, AssayTwin] = {
@@ -47,12 +54,18 @@ TWINS: dict[str, AssayTwin] = {
         design_spec_type=DesignSpec,
         score_fn=score_design,
         default_capacity=PLATE_WELLS,
+        default_design=EXPERIMENT_4_AS_RUN,
+        optimize_fn=optimize_design,
+        advise_fn=advise,
     ),
     "bleomycin_lung": AssayTwin(
         key="bleomycin_lung",
         design_spec_type=BleomycinDesignSpec,
         score_fn=score_bleomycin_design,
         default_capacity=DEFAULT_COHORT_CAPACITY,
+        default_design=DEFAULT_BLEOMYCIN_DESIGN,
+        optimize_fn=optimize_bleomycin_design,
+        advise_fn=advise_bleomycin_design,
     ),
 }
 
