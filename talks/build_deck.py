@@ -357,7 +357,56 @@ _set(p, "The agentic-science framing is why it's a benchmark today. The "
         "gets cast.", 17, INK)
 _footer(s, n)
 
-# --- 8. Close --------------------------------------------------------------
+# --- 8. The handoff ----------------------------------------------------
+
+s = new_slide()
+_kicker(s, "Two builders, one seam")
+_title(s, "This is layer 2. Someone else is building layer 1.")
+_bullets(s, Inches(0.7), Inches(2.05), Inches(6.9), Inches(2.6), [
+    ("Layer 1 —", "due diligence to exhaustion. Checks a hypothesis "
+     "against the data and the literature until nothing left changes "
+     "the answer, then either stops — resolved, no handoff — or "
+     "hands off the one residual only a bench can settle."),
+    ("Layer 2 —", "everything in this deck. Designs the experiment for "
+     "that residual, and refuses honestly when no protocol can model "
+     "it."),
+], size=17, gap=18)
+_rule(s, Inches(4.85))
+_, tf = _box(s, Inches(0.7), Inches(5.1), Inches(6.9), Inches(1.8))
+p = tf.paragraphs[0]
+_set(p, "The contract, verified against the running code, not just agreed "
+        "in prose:", 15, MUTED)
+p2 = tf.add_paragraph()
+p2.space_before = Pt(8)
+_set(p2, "“Looked and it's not there” ≠ “never looked.”", 19, NAVY,
+     bold=True)
+p3 = tf.add_paragraph()
+p3.space_before = Pt(4)
+_set(p3, "Enforced at construction — a claim of literature silence with "
+         "no recorded query raises, not a convention anyone could skip.",
+     14, MUTED, italic=True)
+_code_block(s, Inches(8.0), Inches(2.05), Inches(4.6), Inches(4.85), [
+    ("Finding(", CODE_TEXT, True),
+    ("  statement, kind,", CODE_MUTED, False),
+    ("  provenance, source,", CODE_MUTED, False),
+    ("  quote, scope,", CODE_MUTED, False),
+    ("  value, units", CODE_MUTED, False),
+    (")", CODE_TEXT, True),
+    ("", CODE_TEXT, False),
+    ("OpenItem(", CODE_TEXT, True),
+    ("  statement, why,", CODE_MUTED, False),
+    ("  searched, queries_run", CODE_MUTED, False),
+    (")", CODE_TEXT, True),
+    ("", CODE_TEXT, False),
+    ("field-for-field match", ACCENT_GREEN, True),
+    ("to the layer-1 SPEC —", ACCENT_GREEN, False),
+    ("not aspirational,", CODE_MUTED, False),
+    ("checked against", CODE_MUTED, False),
+    ("refute/handoff.py", CODE_TEXT, False),
+], size=13.5)
+_footer(s, n)
+
+# --- 9. Close --------------------------------------------------------------
 
 s = new_slide()
 _kicker(s, "The line worth having ready")
