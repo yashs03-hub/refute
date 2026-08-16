@@ -59,18 +59,25 @@ handle `None`, or call `require_term` and take the exception.
 DERIVED, NOT INVENTED
 ---------------------
 Every declared term traces to a protocol field, and each `Term` records which
-field, which protocols, and the exact source string. Three facets - species,
-tissue, cell type - are absent, because `AssayProtocol` has no field for any of
-them. They are reported as absent rather than filled with plausible guesses.
+field, which protocols, and the exact source string. `AssayProtocol` now has
+`species` / `tissue` / `cell_type` fields (added 2026-08-16, as `ScopeTerm |
+None`, see `base.py`), and each of the seven registered protocols populates
+them - but only with what its own `name`/`summary` text actually states.
 `bleomycin_lung` is obviously murine and `fibrin_contracture` obviously uses
-human synovial fibroblasts, but that knowledge lives in a `name` and a `summary`
-sentence, and a vocabulary assembled by reading prose is a vocabulary that
-disagrees with the code it claims to describe. An absence that is visible in a
-report is worth more than a guess that looks like a field.
+human synovial fibroblasts, and those two say so with `ScopeBasis.STATED` or
+`.INFERRED`. Every other protocol names only "cells" or "fibroblasts", with no
+species and (mostly) no cell type either, and those facets are recorded as
+`ScopeTerm.unspecified(why)` rather than filled with a plausible guess: reading
+a species into "fibroblasts" because a plausible one exists somewhere in the
+literature is exactly the private-ontology failure this module exists to avoid.
+An absence that is visible in a report is worth more than a guess that looks
+like a field.
 
-Those three facets read their value with `getattr`, from the field name they
-*would* use. If the agreement adds `AssayProtocol.species`, this module needs no
-edit: the facet populates and the report changes on the next run.
+Those three facets still read their value with `getattr`, from the field name
+they use - the mechanism predates the fields existing, which is why populating
+`AssayProtocol.species` on the six tier-1 scaffolds plus `fibrin_contracture`
+required no edit here at all: the facets populated and the report changed on
+the next run.
 
 ON EXTERNAL ONTOLOGIES
 ----------------------

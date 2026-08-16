@@ -8,7 +8,15 @@ not in the calibration module, it does not belong here.
 from __future__ import annotations
 
 from .. import calibration as cal
-from .base import AssayProtocol, CalibrationStatus, Constant, HazardSpec, ReadoutSpec
+from .base import (
+    AssayProtocol,
+    CalibrationStatus,
+    Constant,
+    HazardSpec,
+    ReadoutSpec,
+    ScopeBasis,
+    ScopeTerm,
+)
 
 PROTOCOL = AssayProtocol(
     key="fibrin_contracture",
@@ -19,6 +27,25 @@ PROTOCOL = AssayProtocol(
         "Primary human synovial fibroblasts in an anchored fibrin construct, "
         "tethered at both ends by sutures over pins in PDMS. Gel area contracts "
         "toward a plateau; the construct is imaged per-well by phone camera."
+    ),
+    species=ScopeTerm(
+        term="human",
+        ontology_id="NCBITaxon:9606",
+        basis=ScopeBasis.STATED,
+        note="'Primary human synovial fibroblasts' is in the summary verbatim.",
+    ),
+    tissue=ScopeTerm(
+        term="synovium",
+        basis=ScopeBasis.INFERRED,
+        note=(
+            "Read off 'synovial fibroblasts' - the cell name states the tissue "
+            "of origin, not a separate declaration. No UBERON id verified."
+        ),
+    ),
+    cell_type=ScopeTerm(
+        term="synovial fibroblast",
+        basis=ScopeBasis.STATED,
+        note="Named directly in the summary. No CL id verified.",
     ),
     why_it_matters=(
         "The reference case. Its treatment window was destroyed by "

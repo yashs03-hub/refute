@@ -37,7 +37,15 @@ As each is calibrated it should move to its own module (as
 
 from __future__ import annotations
 
-from .base import AssayProtocol, CalibrationStatus, Constant, HazardSpec, ReadoutSpec
+from .base import (
+    AssayProtocol,
+    CalibrationStatus,
+    Constant,
+    HazardSpec,
+    ReadoutSpec,
+    ScopeBasis,
+    ScopeTerm,
+)
 
 
 def _missing(name: str, units: str, what: str) -> Constant:
@@ -57,6 +65,17 @@ TRACTION_FORCE = AssayProtocol(
         "Cells on a bead-embedded polyacrylamide gel of known modulus. Bead "
         "displacement is inverted to a traction field; the summary readout is "
         "strain energy or total contractile moment."
+    ),
+    species=ScopeTerm.unspecified(
+        "summary names only 'cells'; traction force microscopy is run across "
+        "many species and cell lines in the literature, and this scaffold does "
+        "not select one."
+    ),
+    tissue=ScopeTerm.unspecified("no tissue of origin is named; see species."),
+    cell_type=ScopeTerm.unspecified(
+        "summary says 'cells', not a specific type - traction microscopy is run "
+        "on fibroblasts, myofibroblasts and smooth muscle cells alike, and this "
+        "scaffold's text does not pick one."
     ),
     why_it_matters=(
         "The closest scientific analogue to case 1: contraction measurement "
@@ -121,6 +140,17 @@ SCAR_IN_A_JAR = AssayProtocol(
         "collagen I into an insoluble matrix over days rather than weeks. "
         "Readout is deposited collagen I by immunofluorescence or hydroxyproline."
     ),
+    species=ScopeTerm.unspecified(
+        "summary says 'fibroblasts' with no species; Good 2019 (the calibrated "
+        "source, see findings/) uses a human line but the scaffold's own text "
+        "does not commit to it, and other scar-in-a-jar papers use other lines."
+    ),
+    tissue=ScopeTerm.unspecified("no tissue of origin is named; see species."),
+    cell_type=ScopeTerm(
+        term="fibroblast",
+        basis=ScopeBasis.STATED,
+        note="'Fibroblasts' is the literal word in the summary.",
+    ),
     why_it_matters=(
         "Best practical second case: widely used in fibrosis drug discovery, "
         "purely in vitro, well documented. Crucially it is DEPOSITION rather "
@@ -182,6 +212,15 @@ CELL_DERIVED_MATRIX = AssayProtocol(
         "leaving an intact matrix characterised for composition, thickness, "
         "fibre alignment or stiffness."
     ),
+    species=ScopeTerm.unspecified(
+        "summary says 'fibroblasts' with no species named."
+    ),
+    tissue=ScopeTerm.unspecified("no tissue of origin is named; see species."),
+    cell_type=ScopeTerm(
+        term="fibroblast",
+        basis=ScopeBasis.STATED,
+        note="'Fibroblasts' is the literal word in the summary.",
+    ),
     why_it_matters=(
         "The failure is concentrated in a single destructive step. Matrix "
         "delaminates during decellularisation, and delamination scales with how "
@@ -239,6 +278,15 @@ FIBROSIS_ON_CHIP = AssayProtocol(
         "co-culturing epithelium and fibroblasts. Strain is applied as a "
         "profibrotic stimulus; readout is deposition, marker expression or "
         "barrier function."
+    ),
+    species=ScopeTerm.unspecified(
+        "summary names the co-culture ('epithelium and fibroblasts') but no "
+        "species."
+    ),
+    tissue=ScopeTerm.unspecified("no tissue of origin is named; see species."),
+    cell_type=ScopeTerm.unspecified(
+        "a co-culture of two populations - epithelium and fibroblasts - is not "
+        "one term. Recording either alone would misstate what the chip runs."
     ),
     why_it_matters=(
         "The tightest coupling on this list: the profibrotic STIMULUS and the "
@@ -300,6 +348,25 @@ BLEOMYCIN_LUNG = AssayProtocol(
         "Intratracheal or oropharyngeal bleomycin induces lung injury and "
         "fibrosis over 14-28 days. Readout is Ashcroft score, hydroxyproline, "
         "or micro-CT density."
+    ),
+    species=ScopeTerm(
+        term="mouse",
+        ontology_id="NCBITaxon:10090",
+        basis=ScopeBasis.STATED,
+        note="'(murine)' is in the protocol name itself.",
+    ),
+    tissue=ScopeTerm(
+        term="lung",
+        basis=ScopeBasis.STATED,
+        note=(
+            "'Lung injury and fibrosis' is in the summary; readout unit is "
+            "'per lung'. No UBERON id verified - left unbound rather than "
+            "guessed."
+        ),
+    ),
+    cell_type=ScopeTerm.unspecified(
+        "whole-organ endpoint (Ashcroft score / hydroxyproline per lung); the "
+        "protocol does not isolate or name a single cell type."
     ),
     why_it_matters=(
         "Where the money is. Effectively every fibrosis drug programme runs it, "
@@ -365,6 +432,13 @@ STIFFNESS_DRIFT = AssayProtocol(
         "Cells cultured on polyacrylamide or PEG gels of defined modulus to test "
         "how substrate stiffness drives myofibroblast activation. Stiffness is "
         "the independent variable."
+    ),
+    species=ScopeTerm.unspecified("summary names only 'cells', no species."),
+    tissue=ScopeTerm.unspecified("no tissue of origin is named; see species."),
+    cell_type=ScopeTerm.unspecified(
+        "myofibroblast activation (asma-positive fraction) is the READOUT, not "
+        "the starting population; the protocol does not name what the cells "
+        "were before activation."
     ),
     why_it_matters=(
         "A different failure class from everything else here, and the reason to "
